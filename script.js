@@ -605,6 +605,16 @@ async function analyzeFloodRisk() {
                 (token ? 'ممکن است محصول MCD12Q1 برای این سال موجود نباشد.' : 'برای دریافت، توکن NASA را وارد کنید.') + '</p>';
         }
 
+                // ذخیره اطلاعات برای PDF
+        lastAnalysis = {
+            lat: lat,
+            lon: lon,
+            finalScore: finalScore,
+            riskLevel: riskLevel,
+            riskAdvice: riskAdvice,
+            factors: factors
+        };
+        
         document.getElementById('details').innerHTML = detailsHtml;
         resultEl.classList.add('show', riskClass);
 
@@ -629,4 +639,285 @@ window.addEventListener('DOMContentLoaded', function() {
     loadToken();
     initMap();
     console.log('برنامه با موفقیت راه‌اندازی شد 🚀 (فاز ۲)');
+
+    // ============================================================
+// ذخیره آخرین تحلیل برای استفاده در PDF
+// ============================================================
+let lastAnalysis = null;
+
+// ============================================================
+// تولید و دانلود PDF
+// ============================================================
+async function downloadPDF() {
+    if (!lastAnalysis) {
+        alert('ابتدا یک تحلیل انجام دهید');
+        return;
+    }
+
+    const btn = document.getElementById('pdfBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ در حال تولید PDF...';
+
+    try {
+        // ========== ۱. آماده‌سازی jsPDF ==========
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        // ابعاد صفحه A4
+        const pageWidth = 210;
+        const pageHeight = 297;
+        const margin = 15;
+        const contentWidth = pageWidth - 2 * margin;
+
+        // ========== ۲. افزودن فونت فارسی ==========
+        // فونت Vazirmatn را از CDN دریافت می‌کنیم
+        try {
+            const fontUrl = 'https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/ttf/Vazirmatn-Regular.ttf';
+            const fontResponse = await fetch(fontUrl);
+            const fontBuffer = await fontResponse.arrayBuffer();
+            
+            // تبدیل به Base64
+            const fontBase64 = arrayBufferToBase64(fontBuffer);
+            
+            doc.addFileToVFS('Vazirmatn-Regular.ttf', fontBase64);
+            doc.addFont('Vazirmatn-Regular.ttf', 'Vazirmatn', 'normal');
+            doc.setFont('Vazirmatn');
+        } catch (fontErr) {
+            console.warn('خطا در بارگذاری فونت:', fontErr);
+            // ادامه بدون فونت فارسی
+        }
+
+        // ========== ۳. سربرگ ==========
+        doc.setFillColor(49, 130, 206); // آبی
+        doc.rect(0, 0, pageWidth, 30, 'F');
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(20);
+        doc.text('Flood Risk Assessment Report', pageWidth / 2, 15, { align: 'center' });
+        
+        doc.setFontSize(10);
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('fa-IR') + ' - ' + now.toLocaleTimeString('fa-IR');
+        doc.text(dateStr, pageWidth / 2, 24, { align: 'center' });
+
+        // ========== ۴. مختصات ==========
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(12);
+        let yPos = 45;
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text('Location / Mokan:', margin, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 7;
+        
+        doc.text(`Latitude: ${lastAnalysis.lat.toFixed(4)}`, margin, yPos);
+        doc.text(`Longitude: ${lastAnalysis.lon.toFixed(4)}`, margin + 80, yPos);
+        yPos += 12;
+
+        // ========== ۵. نمره نهایی ==========
+        // کادر رنگی برای نمره
+        const scoreColor = getScoreRGB(lastAnalysis.finalScore);
+        doc.setFillColor(scoreColor[0], scoreColor[1], scoreColor[2]);
+        doc.roundedRect(margin, yPos, contentWidth, 25, 3, 3, 'F');
+        
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Risk Score: ${lastAnalysis.finalScore.toFixed(2)} / 10`, margin + 5, yPos + 10);
+        
+        doc.setFontSize(12);
+        doc.text(`Risk Level: ${getRiskLevelEn(lastAnalysis.finalScore)}`, margin + 5, yPos + 18);
+        
+        yPos += 35;
+
+        // ========== ۶. نقشه ==========
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Map / Naghsheh:', margin, yPos);
+        yPos += 5;
+
+        // تبدیل نقشه به تصویر
+        try {
+            const mapElement = document.getElementById('map');
+            const canvas = await html2canvas(mapElement, {
+                useCORS: true,
+                allowTaint: true,
+                scale: 2,
+                backgroundColor: '#ffffff'
+            });
+            const mapImage = canvas.toDataURL('image/png');
+            
+            const mapHeight = 70;
+            doc.addImage(mapImage, 'PNG', margin, yPos, contentWidth, mapHeight);
+            yPos += mapHeight + 10;
+        } catch (mapErr) {
+            console.warn('خطا در تبدیل نقشه:', mapErr);
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(10);
+            doc.text('(Map image could not be generated)', margin, yPos);
+            yPos += 10;
+        }
+
+        // ========== ۷. جدول پارامترها ==========
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Parameters / Parametr-ha:', margin, yPos);
+        yPos += 7;
+
+        // سربرگ جدول
+        const colWidths = [contentWidth * 0.35, contentWidth * 0.35, contentWidth * 0.15, contentWidth * 0.15];
+        const colX = [margin, margin + colWidths[0], margin + colWidths[0] + colWidths[1], margin + colWidths[0] + colWidths[1] + colWidths[2]];
+        
+        // پس‌زمینه سربرگ
+        doc.setFillColor(226, 232, 240);
+        doc.rect(margin, yPos, contentWidth, 8, 'F');
+        
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Parameter', colX[0] + 2, yPos + 5.5);
+        doc.text('Value', colX[1] + 2, yPos + 5.5);
+        doc.text('Score', colX[2] + 2, yPos + 5.5);
+        doc.text('Weight', colX[3] + 2, yPos + 5.5);
+        yPos += 8;
+
+        // ردیف‌های جدول
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        
+        lastAnalysis.factors.forEach((f, i) => {
+            // پس‌زمینه ردیف‌های زوج
+            if (i % 2 === 0) {
+                doc.setFillColor(247, 250, 252);
+                doc.rect(margin, yPos, contentWidth, 8, 'F');
+            }
+            
+            // متن (متن انگلیسی برای سازگاری با jsPDF)
+            const paramEn = getParamNameEn(f.name);
+            const valueText = getValueEn(f.value);
+            
+            doc.text(paramEn, colX[0] + 2, yPos + 5.5);
+            doc.text(valueText, colX[1] + 2, yPos + 5.5);
+            doc.text(`${f.score}/10`, colX[2] + 2, yPos + 5.5);
+            doc.text(`${f.weight}`, colX[3] + 2, yPos + 5.5);
+            
+            yPos += 8;
+        });
+
+        // خط پایانی جدول
+        doc.setDrawColor(200, 200, 200);
+        doc.line(margin, yPos, margin + contentWidth, yPos);
+        yPos += 10;
+
+        // ========== ۸. توصیه ==========
+        if (lastAnalysis.riskAdvice) {
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Recommendation / Towsiyeh:', margin, yPos);
+            yPos += 6;
+            
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            
+            // توصیه انگلیسی بر اساس سطح
+            const adviceEn = getAdviceEn(lastAnalysis.finalScore);
+            const adviceLines = doc.splitTextToSize(adviceEn, contentWidth);
+            doc.text(adviceLines, margin, yPos);
+            yPos += adviceLines.length * 5 + 5;
+        }
+
+        // ========== ۹. پانویس ==========
+        const footerY = pageHeight - 20;
+        doc.setDrawColor(200, 200, 200);
+        doc.line(margin, footerY - 5, margin + contentWidth, footerY - 5);
+        
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.setFont('helvetica', 'italic');
+        doc.text(
+            'This analysis is based on global data and simplified models. It is not a substitute for detailed hydrological studies.',
+            margin,
+            footerY
+        );
+        doc.text(
+            `Generated by Flood Risk Assessment Tool - ${now.toLocaleString()}`,
+            margin,
+            footerY + 5
+        );
+
+        // ========== ۱۰. ذخیره فایل ==========
+        const fileName = `flood-risk-${lastAnalysis.lat.toFixed(4)}-${lastAnalysis.lon.toFixed(4)}-${Date.now()}.pdf`;
+        doc.save(fileName);
+
+        console.log('✅ PDF با موفقیت تولید شد:', fileName);
+
+    } catch (e) {
+        console.error('خطا در تولید PDF:', e);
+        alert('خطا در تولید PDF: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '📄 دانلود گزارش PDF';
+    }
+}
+
+// ============================================================
+// توابع کمکی PDF
+// ============================================================
+function arrayBufferToBase64(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+}
+
+function getScoreRGB(score) {
+    if (score >= 8) return [229, 62, 62];      // قرمز
+    if (score >= 6) return [221, 107, 32];     // نارنجی
+    if (score >= 4) return [214, 158, 46];     // زرد
+    if (score >= 2) return [56, 161, 105];     // سبز روشن
+    return [34, 84, 61];                        // سبز تیره
+}
+
+function getRiskLevelEn(score) {
+    if (score >= 8) return 'Very High';
+    if (score >= 6) return 'High';
+    if (score >= 4) return 'Medium';
+    if (score >= 2) return 'Low';
+    return 'Very Low';
+}
+
+function getAdviceEn(score) {
+    if (score >= 8) return 'This area is at serious risk of flooding. Immediate prevention and preparedness measures are needed.';
+    if (score >= 6) return 'Flood risk is significant. Preparedness and risk reduction programs are recommended.';
+    if (score >= 4) return 'Flood risk is moderate. Monitoring and precautionary measures are recommended.';
+    if (score >= 2) return 'Flood risk is low. However, awareness during rainy season is still recommended.';
+    return 'Flood risk in this area is very low.';
+}
+
+function getParamNameEn(faName) {
+    const map = {
+        'ارتفاع از سطح دریا': 'Elevation',
+        'شیب زمین': 'Slope',
+        'بارش سالانه (تخمینی)': 'Annual Precipitation',
+        'حداکثر بارش روزانه': 'Max Daily Precipitation',
+        'بارش میانگین ۱۰ روز اخیر': 'Recent Avg Precipitation',
+        'شاخص پوشش گیاهی (NDVI)': 'NDVI (Vegetation)',
+        'کاربری اراضی': 'Land Cover'
+    };
+    return map[faName] || faName;
+}
+
+function getValueEn(faValue) {
+    return faValue
+        .replace(/متر/g, 'm')
+        .replace(/میلی‌متر/g, 'mm')
+        .replace(/%/g, '%');
+}
 });
