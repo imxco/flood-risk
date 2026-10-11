@@ -523,7 +523,7 @@ async function analyzeFloodRisk() {
     const loadingEl = document.getElementById('loading');
     const btn = document.getElementById('analyzeBtn');
 
-    resultEl.classList.remove('show', 'low', 'medium', 'high');
+        resultEl.classList.remove('show', 'very-low', 'low', 'medium', 'high', 'very-high');
 
     const lat = parseFloat(document.getElementById('lat').value);
     const lon = parseFloat(document.getElementById('lon').value);
@@ -559,20 +559,33 @@ async function analyzeFloodRisk() {
         const slopePercent = slopeData ? slopeData.slopePercent : null;
         const { factors, finalScore } = calculateRisk(elevation, slopePercent, precipData, histPrecip, ndviData, landCoverData);
 
-        let riskLevel, riskClass;
-        if (finalScore >= 7) {
-            riskLevel = '🔴 ریسک بالا';
+                let riskLevel, riskClass, riskAdvice;
+        if (finalScore >= 8) {
+            riskLevel = '🔴 ریسک خیلی زیاد';
+            riskClass = 'very-high';
+            riskAdvice = 'این منطقه در معرض خطر جدی سیل قرار دارد. اقدامات فوری پیشگیری و آماده‌سازی لازم است.';
+        } else if (finalScore >= 6) {
+            riskLevel = '🟠 ریسک زیاد';
             riskClass = 'high';
+            riskAdvice = 'خطر سیل قابل توجه است. برنامه‌های آمادگی و کاهش خطر توصیه می‌شود.';
         } else if (finalScore >= 4) {
             riskLevel = '🟡 ریسک متوسط';
             riskClass = 'medium';
-        } else {
-            riskLevel = '🟢 ریسک پایین';
+            riskAdvice = 'ریسک سیل در حد متوسط است. پایش و اقدامات احتیاطی توصیه می‌شود.';
+        } else if (finalScore >= 2) {
+            riskLevel = '🟢 ریسک کم';
             riskClass = 'low';
+            riskAdvice = 'ریسک سیل پایین است. اما همچنان هوشیاری در فصل بارش توصیه می‌شود.';
+        } else {
+            riskLevel = '🟢 ریسک خیلی کم';
+            riskClass = 'very-low';
+            riskAdvice = 'ریسک سیل در این منطقه بسیار پایین است.';
         }
 
-        document.getElementById('riskLevel').textContent = riskLevel;
-        document.getElementById('riskScore').innerHTML = `<strong>نمره ریسک: ${finalScore.toFixed(2)} از ۱۰</strong>`;
+               document.getElementById('riskLevel').textContent = riskLevel;
+        document.getElementById('riskScore').innerHTML = 
+            `<strong>نمره ریسک: ${finalScore.toFixed(2)} از ۱۰</strong>` +
+            `<p style="margin-top: 10px; font-size: 14px; color: #4a5568; line-height: 1.6;">${riskAdvice}</p>`;
 
         let detailsHtml = '<h3 style="margin: 15px 0 10px;">📊 جزئیات پارامترها:</h3>';
         factors.forEach(f => {
