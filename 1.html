@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ارزیابی ریسک سیل با داده‌های NASA</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f4f8; padding: 20px; }
+        .container { max-width: 850px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); padding: 30px; }
+        h1 { color: #1a365d; margin-bottom: 20px; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; color: #2d3748; }
+        input { width: 100%; padding: 10px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px; }
+        input:focus { outline: none; border-color: #3182ce; }
+        button { width: 100%; padding: 12px; background: #3182ce; color: white; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #2c5282; }
+        button:disabled { background: #a0aec0; cursor: not-allowed; }
+        .result { margin-top: 25px; padding: 20px; border-radius: 8px; display: none; }
+        .result.show { display: block; }
+        .result.low { background: #c6f6d5; border-left: 5px solid #38a169; }
+        .result.medium { background: #fefcbf; border-left: 5px solid #d69e2e; }
+        .result.high { background: #fed7d7; border-left: 5px solid #e53e3e; }
+        .result h2 { margin-bottom: 15px; }
+        .param-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,0.1); }
+        .error { background: #fed7d7; color: #c53030; padding: 15px; border-radius: 8px; margin-top: 15px; display: none; }
+        .loading { text-align: center; color: #3182ce; margin-top: 15px; display: none; }
+        .note { font-size: 12px; color: #718096; margin-top: 10px; }
+        .token-section { background: #edf2f7; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .token-section h3 { font-size: 14px; color: #4a5568; margin-bottom: 10px; }
+        .token-status { font-size: 13px; margin-top: 8px; }
+        .token-status.ok { color: #38a169; }
+        .token-status.missing { color: #e53e3e; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌊 ارزیابی ریسک سیل</h1>
+
+        <div class="token-section">
+            <h3>🔑 توکن NASA Earthdata (برای دریافت داده‌های NDVI)</h3>
+            <input type="password" id="nasaToken" placeholder="توکن خود را اینجا وارد کنید">
+            <div class="token-status" id="tokenStatus"></div>
+            <button type="button" onclick="saveToken()" style="padding:8px; font-size:14px; margin-top:10px; background:#4a5568;">ذخیره توکن در مرورگر</button>
+            <p class="note">توکن فقط در حافظه محلی مرورگر شما ذخیره می‌شود و به هیچ سروری ارسال نمی‌گردد.</p>
+        </div>
+
+        <div class="form-group">
+            <label>عرض جغرافیایی (Latitude):</label>
+            <input type="number" id="lat" step="0.0001" placeholder="مثال: 35.6892" value="35.6892">
+        </div>
+
+        <div class="form-group">
+            <label>طول جغرافیایی (Longitude):</label>
+            <input type="number" id="lon" step="0.0001" placeholder="مثال: 51.3890" value="51.3890">
+        </div>
+
+        <button id="analyzeBtn" onclick="analyzeFloodRisk()">تحلیل ریسک سیل</button>
+
+        <div class="loading" id="loading">⏳ در حال دریافت داده‌ها...</div>
+        <div class="error" id="error"></div>
+
+        <div class="result" id="result">
+            <h2 id="riskLevel"></h2>
+            <div id="riskScore"></div>
+            <div id="details"></div>
+            <p class="note">⚠️ این تحلیل بر اساس داده‌های جهانی و مدل‌های ساده‌شده انجام شده و جایگزین مطالعات دقیق هیدرولوژیکی نیست.</p>
+        </div>
+    </div>
+
+    <script>
+        // ============ مدیریت توکن ============
+        function loadToken() {
+            const token = localStorage.getItem('nasa_token');
+            const input = document.getElementById('nasaToken');
+            const status = document.getElementById('tokenStatus');
+            if (token) {
+                input.value = token;
+                status.textContent = '✅ توکن ذخیره شده است';
+                status.className = 'token-status ok';
+            } else {
+                status.textContent = '⚠️ توکن وارد نشده است. داده‌های NDVI دریافت نخواهند شد.';
+                status.className = 'token-status missing';
+            }
+        }
+
+        function saveToken() {
+            const token = document.getElementById('nasaToken').value.trim();
+            const status = document.getElementById('tokenStatus');
+            if (token) {
+                localStorage.setItem('nasa_token', token);
+                status.textContent = '✅ توکن ذخیره شد';
+                status.className = 'token-status ok';
+            } else {
+                localStorage.removeItem('nasa_token');
+                status.textContent = '⚠️ توکن وارد نشده است.';
+                status.className = 'token-status missing';
+            }
+        }
+
+        function getToken() {
+            return document.getElementById('nasaToken').value.trim() || localStorage.getItem('nasa_token') || '';
+        }
+
+        // ============ توابع کمکی ============
+        function showError(msg) {
+            const el = document.getElementById('error');
+            el.textContent = msg;
+            el.style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        // ============ دریافت ارتفاع از Open-Meteo ============
+        async function getElevation(lat, lon) {
+            const url = `https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`;
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('خطا در دریافت ارتفاع');
+                const data = await res.json();
+                return data.elevation[0];
+            } catch (e) {
+                console.warn('Elevation error:', e);
+                return null;
+            }
+        }
+
+        // ============ دریافت بارش اخیر ============
+        async function getPrecipitation(lat, lon) {
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&past_days=10&forecast_days=1&timezone=auto`;
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('خطا در دریافت بارش');
+                const data = await res.json();
+                const precip = data.daily.precipitation_sum.filter(v => v !== null);
+                if (precip.length === 0) return null;
+                return {
+                    avg: precip.reduce((a, b) => a + b, 0) / precip.length,
+                    max: Math.max(...precip)
+                };
+            } catch (e) {
+                console.warn('Precipitation error:', e);
+                return null;
+            }
+        }
+
+        // ============ دریافت بارش تاریخی ============
+        async function getHistoricalPrecipitation(lat, lon) {
+            const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=2023-01-01&end_date=2023-12-31&daily=precipitation_sum&timezone=auto`;
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('خطا در دریافت بارش تاریخی');
+                const data = await res.json();
+                const precip = data.daily.precipitation_sum.filter(v => v !== null);
+                if (precip.length === 0) return null;
+                return {
+                    annual: precip.reduce((a, b) => a + b, 0),
+                    maxDaily: Math.max(...precip)
+                };
+            } catch (e) {
+                console.warn('Historical precipitation error:', e);
+                return null;
+            }
+        }
+
+        // ============ تخمین شیب ============
+        async function estimateSlope(lat, lon) {
+            const delta = 0.01;
+            const points = [
+                { lat: lat + delta, lon: lon },
+                { lat: lat - delta, lon: lon },
+                { lat: lat, lon: lon + delta },
+                { lat: lat, lon: lon - delta }
+            ];
+            const elevs = await Promise.all(points.map(p => getElevation(p.lat, p.lon)));
+            const centerElev = await getElevation(lat, lon);
+            if (centerElev === null || elevs.some(e => e === null)) return null;
+
+            const dLat = delta * 111000;
+            const dLon = delta * 111000 * Math.cos(lat * Math.PI / 180);
+            const gradN = (elevs[0] - centerElev) / dLat;
+            const gradS = (centerElev - elevs[1]) / dLat;
+            const gradE = (elevs[2] - centerElev) / dLon;
+            const gradW = (centerElev - elevs[3]) / dLon;
+            const gradMag = Math.sqrt(Math.pow((gradN + gradS) / 2, 2) + Math.pow((gradE + gradW) / 2, 2));
+            return { slopePercent: gradMag * 100 };
+        }
+
+        // ============ دریافت NDVI از ORNL DAAC ============
+      // ============ دریافت NDVI از ORNL DAAC ============
+async function getNDVI(lat, lon, token) {
+    if (!token) {
+        console.warn('توکن NASA وارد نشده است');
+        return null;
+    }
+
+    const url = `https://modis.ornl.gov/rst/api/v1/MOD13Q1/subset` +
+        `?latitude=${lat}&longitude=${lon}` +
+        `&band=250m_16_days_NDVI` +
+        `&startDate=A2023001&endDate=A2023096` +
+        `&kmAboveBelow=1&kmLeftRight=1`;
+
+    console.log('NDVI Request URL:', url);
+
+    try {
+        const res = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+            }
+        });
+
+        console.log('NDVI Response Status:', res.status);
+
+        if (!res.ok) {
+            console.warn('NDVI request failed:', res.status);
+            return null;
+        }
+
+        const data = await res.json();
+        console.log('NDVI Data:', data);
+
+        if (!data.subset || !Array.isArray(data.subset) || data.subset.length === 0) {
+            console.warn('NDVI subset خالی است');
+            return null;
+        }
+
+        // استخراج scale از پاسخ (پیش‌فرض 0.0001)
+        const scale = parseFloat(data.scale) || 0.0001;
+        console.log('NDVI scale factor:', scale);
+
+        // استخراج مقادیر NDVI
+        const values = [];
+        data.subset.forEach((item, index) => {
+            console.log(`آیتم ${index}:`, item);
+
+            // امتحان نام‌های مختلف فیلد مقدار
+            let rawValue = null;
+            if (item.value !== undefined) rawValue = item.value;
+            else if (item.data !== undefined) rawValue = item.data;
+            else if (item.ndvi !== undefined) rawValue = item.ndvi;
+            else if (item.NDVI !== undefined) rawValue = item.NDVI;
+
+            if (rawValue === null) return;
+
+            const numValue = parseFloat(rawValue);
+            if (isNaN(numValue)) return;
+
+            // اعمال scale
+            const scaledValue = numValue * scale;
+
+            // فیلتر مقادیر پر (معمولاً -3000 یا -10000 یا مشابه)
+            // NDVI معتبر بین -1 و 1 است
+            if (scaledValue >= -1 && scaledValue <= 1 && numValue !== -3000) {
+                values.push(scaledValue);
+            } else {
+                console.log(`مقدار نامعتبر رد شد: خام=${numValue}، مقیاس‌شده=${scaledValue}`);
+            }
+        });
+
+        if (values.length === 0) {
+            console.warn('هیچ مقدار NDVI معتبری یافت نشد');
+            return null;
+        }
+
+        const avg = values.reduce((a, b) => a + b, 0) / values.length;
+
+        console.log('NDVI values:', values);
+        console.log('NDVI average:', avg);
+
+        return {
+            avg: avg,
+            min: Math.min(...values),
+            max: Math.max(...values),
+            count: values.length
+        };
+
+    } catch (e) {
+        console.warn('NDVI error:', e);
+        return null;
+    }
+}
+        // ============ محاسبه ریسک ============
+        function calculateRisk(elevation, slopePercent, precipData, histPrecip, ndviData) {
+            const factors = [];
+            let totalScore = 0;
+            let weightSum = 0;
+
+            // ۱. ارتفاع (وزن ۳)
+            if (elevation !== null) {
+                let score;
+                if (elevation < 200) score = 10;
+                else if (elevation < 500) score = 8;
+                else if (elevation < 1000) score = 6;
+                else if (elevation < 1500) score = 4;
+                else if (elevation < 2000) score = 2;
+                else score = 1;
+                factors.push({ name: 'ارتفاع از سطح دریا', value: `${elevation.toFixed(0)} متر`, score, weight: 3 });
+                totalScore += score * 3;
+                weightSum += 3;
+            }
+
+            // ۲. شیب (وزن ۳)
+            if (slopePercent !== null) {
+                let score;
+                if (slopePercent < 0.5) score = 10;
+                else if (slopePercent < 1) score = 8;
+                else if (slopePercent < 2) score = 6;
+                else if (slopePercent < 5) score = 4;
+                else if (slopePercent < 10) score = 2;
+                else score = 1;
+                factors.push({ name: 'شیب زمین', value: `${slopePercent.toFixed(2)}%`, score, weight: 3 });
+                totalScore += score * 3;
+                weightSum += 3;
+            }
+
+            // ۳. بارش سالانه (وزن ۴)
+            if (histPrecip) {
+                let score;
+                const annual = histPrecip.annual;
+                if (annual > 1000) score = 10;
+                else if (annual > 700) score = 8;
+                else if (annual > 500) score = 6;
+                else if (annual > 300) score = 4;
+                else if (annual > 150) score = 2;
+                else score = 1;
+                factors.push({ name: 'بارش سالانه (تخمینی)', value: `${annual.toFixed(0)} میلی‌متر`, score, weight: 4 });
+                totalScore += score * 4;
+                weightSum += 4;
+
+                let maxScore;
+                const maxD = histPrecip.maxDaily;
+                if (maxD > 50) maxScore = 10;
+                else if (maxD > 30) maxScore = 8;
+                else if (maxD > 20) maxScore = 6;
+                else if (maxD > 10) maxScore = 4;
+                else maxScore = 2;
+                factors.push({ name: 'حداکثر بارش روزانه', value: `${maxD.toFixed(1)} میلی‌متر`, score: maxScore, weight: 2 });
+                totalScore += maxScore * 2;
+                weightSum += 2;
+            }
+
+            // ۴. بارش اخیر (وزن ۲)
+            if (precipData) {
+                let score;
+                const avg = precipData.avg;
+                if (avg > 5) score = 10;
+                else if (avg > 3) score = 8;
+                else if (avg > 1) score = 6;
+                else if (avg > 0.5) score = 4;
+                else score = 2;
+                factors.push({ name: 'بارش میانگین ۱۰ روز اخیر', value: `${avg.toFixed(2)} میلی‌متر`, score, weight: 2 });
+                totalScore += score * 2;
+                weightSum += 2;
+            }
+
+            // ۵. NDVI (وزن ۳)
+            if (ndviData) {
+                let score;
+                const ndvi = ndviData.avg;
+                if (ndvi < 0) score = 10;
+                else if (ndvi < 0.1) score = 9;
+                else if (ndvi < 0.2) score = 7;
+                else if (ndvi < 0.3) score = 5;
+                else if (ndvi < 0.4) score = 4;
+                else if (ndvi < 0.5) score = 3;
+                else if (ndvi < 0.6) score = 2;
+                else score = 1;
+                factors.push({ name: 'شاخص پوشش گیاهی (NDVI)', value: ndvi.toFixed(3), score, weight: 3 });
+                totalScore += score * 3;
+                weightSum += 3;
+            }
+
+            const finalScore = weightSum > 0 ? totalScore / weightSum : 0;
+            return { factors, finalScore };
+        }
+
+        // ============ تابع اصلی ============
+        async function analyzeFloodRisk() {
+            hideError();
+            const resultEl = document.getElementById('result');
+            const loadingEl = document.getElementById('loading');
+            const btn = document.getElementById('analyzeBtn');
+
+            resultEl.classList.remove('show', 'low', 'medium', 'high');
+
+            const lat = parseFloat(document.getElementById('lat').value);
+            const lon = parseFloat(document.getElementById('lon').value);
+
+            if (isNaN(lat) || isNaN(lon)) {
+                showError('لطفاً مختصات معتبر وارد کنید');
+                return;
+            }
+
+            btn.disabled = true;
+            loadingEl.style.display = 'block';
+
+            const token = getToken();
+
+            try {
+                const [elevation, slopeData, precipData, histPrecip, ndviData] = await Promise.all([
+                    getElevation(lat, lon),
+                    estimateSlope(lat, lon),
+                    getPrecipitation(lat, lon),
+                    getHistoricalPrecipitation(lat, lon),
+                    getNDVI(lat, lon, token)
+                ]);
+
+                loadingEl.style.display = 'none';
+
+                if (elevation === null && !slopeData && !histPrecip) {
+                    showError('متأسفانه نتوانستیم داده‌ای برای این موقعیت دریافت کنیم.');
+                    btn.disabled = false;
+                    return;
+                }
+
+                const slopePercent = slopeData ? slopeData.slopePercent : null;
+                const { factors, finalScore } = calculateRisk(elevation, slopePercent, precipData, histPrecip, ndviData);
+
+                let riskLevel, riskClass;
+                if (finalScore >= 7) {
+                    riskLevel = '🔴 ریسک بالا';
+                    riskClass = 'high';
+                } else if (finalScore >= 4) {
+                    riskLevel = '🟡 ریسک متوسط';
+                    riskClass = 'medium';
+                } else {
+                    riskLevel = '🟢 ریسک پایین';
+                    riskClass = 'low';
+                }
+
+                document.getElementById('riskLevel').textContent = riskLevel;
+                document.getElementById('riskScore').innerHTML = `<strong>نمره ریسک: ${finalScore.toFixed(2)} از ۱۰</strong>`;
+
+                let detailsHtml = '<h3 style="margin: 15px 0 10px;">📊 جزئیات پارامترها:</h3>';
+                factors.forEach(f => {
+                    detailsHtml += `<div class="param-row">
+                        <span>${f.name}</span>
+                        <span>${f.value} (نمره: ${f.score}/10، وزن: ${f.weight})</span>
+                    </div>`;
+                });
+
+                if (!ndviData) {
+                    detailsHtml += '<p style="color: #d69e2e; margin-top: 10px;">⚠️ داده NDVI دریافت نشد. ' +
+                        (token ? 'ممکن است توکن نامعتبر باشد یا سرویس در دسترس نباشد.' : 'برای دریافت، توکن NASA را وارد کنید.') + '</p>';
+                }
+
+                document.getElementById('details').innerHTML = detailsHtml;
+                resultEl.classList.add('show', riskClass);
+
+            } catch (e) {
+                console.error(e);
+                showError('خطا در تحلیل: ' + e.message);
+            } finally {
+                loadingEl.style.display = 'none';
+                btn.disabled = false;
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', loadToken);
+    </script>
+</body>
+</html>
