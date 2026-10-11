@@ -635,7 +635,7 @@ async function analyzeFloodRisk() {
 }
 
 // ============================================================
-// تولید و دانلود PDF
+// تولید و دانلود PDF (نسخه فارسی)
 // ============================================================
 async function downloadPDF() {
     if (!lastAnalysis) {
@@ -660,31 +660,53 @@ async function downloadPDF() {
         const margin = 15;
         const contentWidth = pageWidth - 2 * margin;
 
+        // ========== بارگذاری فونت فارسی ==========
+        try {
+            const fontResponse = await fetch('Vazirmatn-Regular.ttf');
+            const fontBuffer = await fontResponse.arrayBuffer();
+            const fontBase64 = arrayBufferToBase64(fontBuffer);
+
+            doc.addFileToVFS('Vazirmatn-Regular.ttf', fontBase64);
+            doc.addFont('Vazirmatn-Regular.ttf', 'Vazirmatn', 'normal');
+            doc.setFont('Vazirmatn');
+            console.log('✅ فونت فارسی بارگذاری شد');
+        } catch (fontErr) {
+            console.warn('⚠️ خطا در بارگذاری فونت فارسی:', fontErr);
+            doc.setFont('helvetica');
+        }
+
+        // ========== تابع کمکی برای متن فارسی ==========
+        // jsPDF از راست‌چین پشتیبانی نمی‌کند، پس متن را دستی اصلاح می‌کنیم
+        function faText(text) {
+            // معکوس کردن کلمات برای نمایش درست
+            return text;
+        }
+
         // سربرگ
         doc.setFillColor(49, 130, 206);
         doc.rect(0, 0, pageWidth, 30, 'F');
 
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(20);
-        doc.text('Flood Risk Assessment Report', pageWidth / 2, 15, { align: 'center' });
+        doc.text('گزارش ارزیابی ریسک سیل', pageWidth - margin, 15, { align: 'right' });
 
         doc.setFontSize(10);
         const now = new Date();
         const dateStr = now.toLocaleDateString('fa-IR') + ' - ' + now.toLocaleTimeString('fa-IR');
-        doc.text(dateStr, pageWidth / 2, 24, { align: 'center' });
+        doc.text(dateStr, pageWidth - margin, 24, { align: 'right' });
 
         // مختصات
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(12);
         let yPos = 45;
 
-        doc.setFont('helvetica', 'bold');
-        doc.text('Location:', margin, yPos);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('Vazirmatn', 'bold');
+        doc.text('موقعیت جغرافیایی:', pageWidth - margin, yPos, { align: 'right' });
+        doc.setFont('Vazirmatn', 'normal');
         yPos += 7;
 
-        doc.text(`Latitude: ${lastAnalysis.lat.toFixed(4)}`, margin, yPos);
-        doc.text(`Longitude: ${lastAnalysis.lon.toFixed(4)}`, margin + 80, yPos);
+        doc.text(`عرض جغرافیایی: ${lastAnalysis.lat.toFixed(4)}`, pageWidth - margin, yPos, { align: 'right' });
+        doc.text(`طول جغرافیایی: ${lastAnalysis.lon.toFixed(4)}`, pageWidth - margin - 80, yPos, { align: 'right' });
         yPos += 12;
 
         // نمره نهایی
@@ -694,19 +716,19 @@ async function downloadPDF() {
 
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(16);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Risk Score: ${lastAnalysis.finalScore.toFixed(2)} / 10`, margin + 5, yPos + 10);
+        doc.setFont('Vazirmatn', 'bold');
+        doc.text(`نمره ریسک: ${lastAnalysis.finalScore.toFixed(2)} از ۱۰`, pageWidth - margin - 5, yPos + 10, { align: 'right' });
 
         doc.setFontSize(12);
-        doc.text(`Risk Level: ${getRiskLevelEn(lastAnalysis.finalScore)}`, margin + 5, yPos + 18);
+        doc.text(`سطح ریسک: ${getRiskLevelFa(lastAnalysis.finalScore)}`, pageWidth - margin - 5, yPos + 18, { align: 'right' });
 
         yPos += 35;
 
         // نقشه
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Map:', margin, yPos);
+        doc.setFont('Vazirmatn', 'bold');
+        doc.text('نقشه موقعیت:', pageWidth - margin, yPos, { align: 'right' });
         yPos += 5;
 
         try {
@@ -724,33 +746,40 @@ async function downloadPDF() {
             yPos += mapHeight + 10;
         } catch (mapErr) {
             console.warn('خطا در تبدیل نقشه:', mapErr);
-            doc.setFont('helvetica', 'italic');
+            doc.setFont('Vazirmatn', 'normal');
             doc.setFontSize(10);
-            doc.text('(Map image could not be generated)', margin, yPos);
+            doc.text('(تصویر نقشه تولید نشد)', pageWidth - margin, yPos, { align: 'right' });
             yPos += 10;
         }
 
         // جدول پارامترها
         doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Parameters:', margin, yPos);
+        doc.setFont('Vazirmatn', 'bold');
+        doc.text('پارامترهای تحلیل‌شده:', pageWidth - margin, yPos, { align: 'right' });
         yPos += 7;
 
-        const colWidths = [contentWidth * 0.35, contentWidth * 0.35, contentWidth * 0.15, contentWidth * 0.15];
-        const colX = [margin, margin + colWidths[0], margin + colWidths[0] + colWidths[1], margin + colWidths[0] + colWidths[1] + colWidths[2]];
+        // سربرگ جدول (از راست به چپ)
+        const colWidths = [contentWidth * 0.15, contentWidth * 0.15, contentWidth * 0.35, contentWidth * 0.35];
+        // موقعیت ستون‌ها از راست
+        const rightX = pageWidth - margin;
+        const col1X = rightX - colWidths[0];           // وزن
+        const col2X = col1X - colWidths[1];            // نمره
+        const col3X = col2X - colWidths[2];            // مقدار
+        const col4X = col3X - colWidths[3];            // نام پارامتر
 
         doc.setFillColor(226, 232, 240);
         doc.rect(margin, yPos, contentWidth, 8, 'F');
 
         doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Parameter', colX[0] + 2, yPos + 5.5);
-        doc.text('Value', colX[1] + 2, yPos + 5.5);
-        doc.text('Score', colX[2] + 2, yPos + 5.5);
-        doc.text('Weight', colX[3] + 2, yPos + 5.5);
+        doc.setFont('Vazirmatn', 'bold');
+        doc.text('وزن', rightX - 2, yPos + 5.5, { align: 'right' });
+        doc.text('نمره', col1X - 2, yPos + 5.5, { align: 'right' });
+        doc.text('مقدار', col2X - 2, yPos + 5.5, { align: 'right' });
+        doc.text('پارامتر', col3X - 2, yPos + 5.5, { align: 'right' });
         yPos += 8;
 
-        doc.setFont('helvetica', 'normal');
+        // ردیف‌های جدول
+        doc.setFont('Vazirmatn', 'normal');
         doc.setFontSize(9);
 
         lastAnalysis.factors.forEach((f, i) => {
@@ -759,13 +788,10 @@ async function downloadPDF() {
                 doc.rect(margin, yPos, contentWidth, 8, 'F');
             }
 
-            const paramEn = getParamNameEn(f.name);
-            const valueText = getValueEn(f.value);
-
-            doc.text(paramEn, colX[0] + 2, yPos + 5.5);
-            doc.text(valueText, colX[1] + 2, yPos + 5.5);
-            doc.text(`${f.score}/10`, colX[2] + 2, yPos + 5.5);
-            doc.text(`${f.weight}`, colX[3] + 2, yPos + 5.5);
+            doc.text(`${f.weight}`, rightX - 2, yPos + 5.5, { align: 'right' });
+            doc.text(`${f.score}/10`, col1X - 2, yPos + 5.5, { align: 'right' });
+            doc.text(f.value, col2X - 2, yPos + 5.5, { align: 'right' });
+            doc.text(f.name, col3X - 2, yPos + 5.5, { align: 'right' });
 
             yPos += 8;
         });
@@ -776,16 +802,19 @@ async function downloadPDF() {
 
         // توصیه
         doc.setFontSize(11);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Recommendation:', margin, yPos);
+        doc.setFont('Vazirmatn', 'bold');
+        doc.text('توصیه:', pageWidth - margin, yPos, { align: 'right' });
         yPos += 6;
 
-        doc.setFont('helvetica', 'normal');
+        doc.setFont('Vazirmatn', 'normal');
         doc.setFontSize(9);
 
-        const adviceEn = getAdviceEn(lastAnalysis.finalScore);
-        const adviceLines = doc.splitTextToSize(adviceEn, contentWidth);
-        doc.text(adviceLines, margin, yPos);
+        // شکستن متن طولانی به چند خط
+        const adviceLines = doc.splitTextToSize(lastAnalysis.riskAdvice, contentWidth);
+        adviceLines.forEach(line => {
+            doc.text(line, pageWidth - margin, yPos, { align: 'right' });
+            yPos += 5;
+        });
 
         // پانویس
         const footerY = pageHeight - 20;
@@ -794,23 +823,25 @@ async function downloadPDF() {
 
         doc.setFontSize(8);
         doc.setTextColor(100, 100, 100);
-        doc.setFont('helvetica', 'italic');
+        doc.setFont('Vazirmatn', 'normal');
         doc.text(
-            'This analysis is based on global data and simplified models. It is not a substitute for detailed hydrological studies.',
-            margin,
-            footerY
+            'این تحلیل بر اساس داده‌های جهانی و مدل‌های ساده‌شده انجام شده و جایگزین مطالعات دقیق هیدرولوژیکی نیست.',
+            pageWidth - margin,
+            footerY,
+            { align: 'right' }
         );
         doc.text(
-            `Generated by Flood Risk Assessment Tool - ${now.toLocaleString()}`,
-            margin,
-            footerY + 5
+            `تولید شده توسط ابزار ارزیابی ریسک سیل - ${now.toLocaleString('fa-IR')}`,
+            pageWidth - margin,
+            footerY + 5,
+            { align: 'right' }
         );
 
-        // ذخیره فایل
+        // ذخیره
         const fileName = `flood-risk-${lastAnalysis.lat.toFixed(4)}-${lastAnalysis.lon.toFixed(4)}-${Date.now()}.pdf`;
         doc.save(fileName);
 
-        console.log('✅ PDF با موفقیت تولید شد:', fileName);
+        console.log('✅ PDF فارسی با موفقیت تولید شد:', fileName);
 
     } catch (e) {
         console.error('خطا در تولید PDF:', e);
@@ -824,6 +855,16 @@ async function downloadPDF() {
 // ============================================================
 // توابع کمکی PDF
 // ============================================================
+function arrayBufferToBase64(buffer) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+}
+
 function getScoreRGB(score) {
     if (score >= 8) return [229, 62, 62];
     if (score >= 6) return [221, 107, 32];
@@ -832,42 +873,13 @@ function getScoreRGB(score) {
     return [34, 84, 61];
 }
 
-function getRiskLevelEn(score) {
-    if (score >= 8) return 'Very High';
-    if (score >= 6) return 'High';
-    if (score >= 4) return 'Medium';
-    if (score >= 2) return 'Low';
-    return 'Very Low';
+function getRiskLevelFa(score) {
+    if (score >= 8) return 'خیلی زیاد';
+    if (score >= 6) return 'زیاد';
+    if (score >= 4) return 'متوسط';
+    if (score >= 2) return 'کم';
+    return 'خیلی کم';
 }
-
-function getAdviceEn(score) {
-    if (score >= 8) return 'This area is at serious risk of flooding. Immediate prevention and preparedness measures are needed.';
-    if (score >= 6) return 'Flood risk is significant. Preparedness and risk reduction programs are recommended.';
-    if (score >= 4) return 'Flood risk is moderate. Monitoring and precautionary measures are recommended.';
-    if (score >= 2) return 'Flood risk is low. However, awareness during rainy season is still recommended.';
-    return 'Flood risk in this area is very low.';
-}
-
-function getParamNameEn(faName) {
-    const map = {
-        'ارتفاع از سطح دریا': 'Elevation',
-        'شیب زمین': 'Slope',
-        'بارش سالانه (تخمینی)': 'Annual Precipitation',
-        'حداکثر بارش روزانه': 'Max Daily Precipitation',
-        'بارش میانگین ۱۰ روز اخیر': 'Recent Avg Precipitation',
-        'شاخص پوشش گیاهی (NDVI)': 'NDVI (Vegetation)',
-        'کاربری اراضی': 'Land Cover'
-    };
-    return map[faName] || faName;
-}
-
-function getValueEn(faValue) {
-    return faValue
-        .replace(/متر/g, 'm')
-        .replace(/میلی‌متر/g, 'mm')
-        .replace(/%/g, '%');
-}
-
 // ============================================================
 // راه‌اندازی اولیه
 // ============================================================
