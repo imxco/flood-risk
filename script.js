@@ -302,7 +302,132 @@ async function getNDVI(lat, lon, token) {
         return null;
     }
 }
+// ============================================================
+// دریافت کاربری اراضی از MODIS MCD12Q1
+// ============================================================
+async function getLandCover(lat, lon, token) {
+    if (!token) {
+        console.warn('توکن NASA وارد نشده است');
+        return null;
+    }
 
+    // MCD12Q1 = محصول کاربری اراضی با دقت 500 متر
+    // LC_Type1 = طبقه‌بندی IGBP (17 کلاس)
+    // آخرین نسخه سالانه: 2022
+    const url = `https://modis.ornl.gov/rst/api/v1/MCD12Q1/subset` +
+        `?latitude=${lat}&longitude=${lon}` +
+        `&band=LC_Type1` +
+        `&startDate=A2022001&endDate=A2022365` +
+        `&kmAboveBelow=1&kmLeftRight=1`;
+
+    console.log('LandCover Request URL:', url);
+
+    try {
+        const res = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+            }
+        });
+
+        console.log('LandCover Response Status:', res.status);
+
+        if (!res.ok) {
+            const errText = await res.text();
+            console.warn('LandCover request failed:', res.status, errText);
+            return null;
+        }
+
+        const data = await res.json();
+        console.log('LandCover Data:', data);
+
+        if (!data.subset || !Array.isArray(data.subset) || data.subset.length === 0) {
+            console.warn('LandCover subset خالی است');
+            return null;
+        }
+
+        // شمارش هر کلاس
+        const classCounts = {};
+        data.subset.forEach(item => {
+            let rawValue = null;
+            if (item.value !== undefined) rawValue = item.value;
+            else if (item.data !== undefined) rawValue = item.data;
+
+            if (rawValue === null) return;
+
+            const classCode = parseInt(rawValue);
+            // فیلتر مقادیر پر (معمولاً 255)
+            if (isNaN(classCode) || classCode === 255) return;
+
+            classCounts[classCode] = (classCounts[classCode] || 0) + 1;
+        });
+
+        if (Object.keys(classCounts).length === 0) {
+            console.warn('هیچ کلاس کاربری اراضی معتبری یافت نشد');
+            return null;
+        }
+
+        // پیدا کردن کلاس غالب (بیشترین فراوانی)
+        let dominantClass = null;
+        let maxCount = 0;
+        for (const [code, count] of Object.entries(classCounts)) {
+            if (count > maxCount) {
+                maxCount = count;
+                dominantClass = parseInt(code);
+            }
+        }
+
+        const info = getLandCoverInfo(dominantClass);
+
+        return {
+            code: dominantClass,
+            name: info.name,
+            nameEn: info.nameEn,
+            floodScore: info.floodScore,
+            description: info.description,
+            classCounts: classCounts,
+            totalPixels: Object.values(classCounts).reduce((a, b) => a + b, 0)
+        };
+
+    } catch (e) {
+        console.warn('LandCover error:', e);
+        return null;
+    }
+}
+
+// ============================================================
+// نگاشت کد IGBP به اطلاعات کاربری اراضی
+// ============================================================
+function getLandCoverInfo(code) {
+    // طبقه‌بندی IGBP - 17 کلاس
+    const mapping = {
+        1:  { name: 'جنگل سوزنی‌برگ همیشه‌سبز', nameEn: 'Evergreen Needleleaf Forest', floodScore: 1, description: 'نفوذپذیری بالا، پوشش گیاهی متراکم' },
+        2:  { name: 'جنگل پهن‌برگ همیشه‌سبز', nameEn: 'Evergreen Broadleaf Forest', floodScore: 1, description: 'نفوذپذیری بالا، پوشش گیاهی متراکم' },
+        3:  { name: 'جنگل سوزنی‌برگ خزان‌کننده', nameEn: 'Deciduous Needleleaf Forest', floodScore: 2, description: 'نفوذپذیری خوب' },
+        4:  { name: 'جنگل پهن‌برگ خزان‌کننده', nameEn: 'Deciduous Broadleaf Forest', floodScore: 2, description: 'نفوذپذیری خوب' },
+        5:  { name: 'جنگل مختلط', nameEn: 'Mixed Forest', floodScore: 2, description: 'نفوذپذیری خوب' },
+        6:  { name: 'بیشه‌زار', nameEn: 'Closed Shrublands', floodScore: 4, description: 'نفوذپذیری متوسط' },
+        7:  { name: 'بوته‌زار باز', nameEn: 'Open Shrublands', floodScore: 5, description: 'نفوذپذیری متوسط تا کم' },
+        8:  { name: 'ساوانای چوبی', nameEn: 'Woody Savannas', floodScore: 5, description: 'نفوذپذیری متوسط' },
+        9:  { name: 'ساوانا', nameEn: 'Savannas', floodScore: 6, description: 'نفوذپذیری کم' },
+        10: { name: 'مرتع', nameEn: 'Grasslands', floodScore: 6, description: 'نفوذپذیری کم' },
+        11: { name: 'تالاب دائمی', nameEn: 'Permanent Wetlands', floodScore: 9, description: 'منطقه آبی، ریسک بالا' },
+        12: { name: 'زمین‌های زراعی', nameEn: 'Croplands', floodScore: 7, description: 'نفوذپذیری کم، رواناب بالا' },
+        13: { name: 'زمین شهری و ساخته‌شده', nameEn: 'Urban and Built-up', floodScore: 10, description: 'سطوح نفوذناپذیر، بالاترین ریسک' },
+        14: { name: 'زراعت/پوشش طبیعی موزاییکی', nameEn: 'Cropland/Natural Vegetation Mosaic', floodScore: 6, description: 'مختلط' },
+        15: { name: 'برف و یخ دائمی', nameEn: 'Permanent Snow and Ice', floodScore: 3, description: 'ذوب برف می‌تواند سیل ایجاد کند' },
+        16: { name: 'زمین بایر', nameEn: 'Barren or Sparsely Vegetated', floodScore: 4, description: 'نفوذپذیری متغیر' },
+        17: { name: 'پهنه آبی', nameEn: 'Water Bodies', floodScore: 10, description: 'سطح آب، ریسک بسیار بالا' }
+    };
+
+    return mapping[code] || { 
+        name: 'نامشخص', 
+        nameEn: 'Unknown', 
+        floodScore: 5, 
+        description: 'کد نامشخص' 
+    };
+}
 // ============================================================
 // محاسبه ریسک
 // ============================================================
