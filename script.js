@@ -9,34 +9,26 @@ let analysisCircle = null;
 // راه‌اندازی نقشه Leaflet
 // ============================================================
 function initMap() {
-    // مختصات اولیه (تهران)
     const initialLat = parseFloat(document.getElementById('lat').value) || 35.6892;
     const initialLon = parseFloat(document.getElementById('lon').value) || 51.3890;
 
-    // ساخت نقشه
     map = L.map('map').setView([initialLat, initialLon], 10);
 
-    // افزودن لایه نقشه (OpenStreetMap - رایگان)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
         maxZoom: 19
     }).addTo(map);
 
-    // افزودن مارکر اولیه
     updateMarker(initialLat, initialLon);
 
-    // رویداد کلیک روی نقشه
     map.on('click', function(e) {
         const lat = e.latlng.lat.toFixed(4);
         const lon = e.latlng.lng.toFixed(4);
 
-        // پر کردن فیلدهای فرم
         document.getElementById('lat').value = lat;
         document.getElementById('lon').value = lon;
 
-        // به‌روزرسانی مارکر
         updateMarker(parseFloat(lat), parseFloat(lon));
-
         console.log(`موقعیت انتخاب شد: ${lat}, ${lon}`);
     });
 }
@@ -47,23 +39,14 @@ function initMap() {
 function updateMarker(lat, lon) {
     if (!map) return;
 
-    // حذف مارکر قبلی
-    if (marker) {
-        map.removeLayer(marker);
-    }
+    if (marker) map.removeLayer(marker);
+    if (analysisCircle) map.removeLayer(analysisCircle);
 
-    // حذف دایره قبلی
-    if (analysisCircle) {
-        map.removeLayer(analysisCircle);
-    }
-
-    // افزودن مارکر جدید
     marker = L.marker([lat, lon], {
         draggable: true,
         title: 'موقعیت تحلیل'
     }).addTo(map);
 
-    // رویداد drag کردن مارکر
     marker.on('dragend', function(e) {
         const pos = e.target.getLatLng();
         document.getElementById('lat').value = pos.lat.toFixed(4);
@@ -71,7 +54,6 @@ function updateMarker(lat, lon) {
         updateMarker(pos.lat, pos.lng);
     });
 
-    // افزودن دایره شعاع تحلیل (حدود ۱ کیلومتر)
     analysisCircle = L.circle([lat, lon], {
         radius: 1000,
         color: '#3182ce',
@@ -80,7 +62,6 @@ function updateMarker(lat, lon) {
         weight: 2
     }).addTo(map);
 
-    // پاپ‌آپ روی مارکر
     marker.bindPopup(`
         <div style="text-align: center; font-family: Tahoma;">
             <strong>موقعیت تحلیل</strong><br>
@@ -302,6 +283,7 @@ async function getNDVI(lat, lon, token) {
         return null;
     }
 }
+
 // ============================================================
 // دریافت کاربری اراضی از MODIS MCD12Q1
 // ============================================================
@@ -311,9 +293,6 @@ async function getLandCover(lat, lon, token) {
         return null;
     }
 
-    // MCD12Q1 = محصول کاربری اراضی با دقت 500 متر
-    // LC_Type1 = طبقه‌بندی IGBP (17 کلاس)
-    // آخرین نسخه سالانه: 2022
     const url = `https://modis.ornl.gov/rst/api/v1/MCD12Q1/subset` +
         `?latitude=${lat}&longitude=${lon}` +
         `&band=LC_Type1` +
@@ -347,7 +326,6 @@ async function getLandCover(lat, lon, token) {
             return null;
         }
 
-        // شمارش هر کلاس
         const classCounts = {};
         data.subset.forEach(item => {
             let rawValue = null;
@@ -357,7 +335,6 @@ async function getLandCover(lat, lon, token) {
             if (rawValue === null) return;
 
             const classCode = parseInt(rawValue);
-            // فیلتر مقادیر پر (معمولاً 255)
             if (isNaN(classCode) || classCode === 255) return;
 
             classCounts[classCode] = (classCounts[classCode] || 0) + 1;
@@ -368,7 +345,6 @@ async function getLandCover(lat, lon, token) {
             return null;
         }
 
-        // پیدا کردن کلاس غالب (بیشترین فراوانی)
         let dominantClass = null;
         let maxCount = 0;
         for (const [code, count] of Object.entries(classCounts)) {
@@ -400,7 +376,6 @@ async function getLandCover(lat, lon, token) {
 // نگاشت کد IGBP به اطلاعات کاربری اراضی
 // ============================================================
 function getLandCoverInfo(code) {
-    // طبقه‌بندی IGBP - 17 کلاس
     const mapping = {
         1:  { name: 'جنگل سوزنی‌برگ همیشه‌سبز', nameEn: 'Evergreen Needleleaf Forest', floodScore: 1, description: 'نفوذپذیری بالا، پوشش گیاهی متراکم' },
         2:  { name: 'جنگل پهن‌برگ همیشه‌سبز', nameEn: 'Evergreen Broadleaf Forest', floodScore: 1, description: 'نفوذپذیری بالا، پوشش گیاهی متراکم' },
@@ -428,10 +403,11 @@ function getLandCoverInfo(code) {
         description: 'کد نامشخص' 
     };
 }
+
 // ============================================================
 // محاسبه ریسک
 // ============================================================
-function calculateRisk(elevation, slopePercent, precipData, histPrecip, ndviData) {
+function calculateRisk(elevation, slopePercent, precipData, histPrecip, ndviData, landCoverData) {
     const factors = [];
     let totalScore = 0;
     let weightSum = 0;
@@ -521,6 +497,19 @@ function calculateRisk(elevation, slopePercent, precipData, histPrecip, ndviData
         weightSum += 3;
     }
 
+    // ۶. کاربری اراضی (وزن ۴)
+    if (landCoverData) {
+        const score = landCoverData.floodScore;
+        factors.push({ 
+            name: 'کاربری اراضی', 
+            value: `${landCoverData.name} (کد ${landCoverData.code})`, 
+            score, 
+            weight: 4 
+        });
+        totalScore += score * 4;
+        weightSum += 4;
+    }
+
     const finalScore = weightSum > 0 ? totalScore / weightSum : 0;
     return { factors, finalScore };
 }
@@ -550,12 +539,13 @@ async function analyzeFloodRisk() {
     const token = getToken();
 
     try {
-        const [elevation, slopeData, precipData, histPrecip, ndviData] = await Promise.all([
+        const [elevation, slopeData, precipData, histPrecip, ndviData, landCoverData] = await Promise.all([
             getElevation(lat, lon),
             estimateSlope(lat, lon),
             getPrecipitation(lat, lon),
             getHistoricalPrecipitation(lat, lon),
-            getNDVI(lat, lon, token)
+            getNDVI(lat, lon, token),
+            getLandCover(lat, lon, token)
         ]);
 
         loadingEl.style.display = 'none';
@@ -567,7 +557,7 @@ async function analyzeFloodRisk() {
         }
 
         const slopePercent = slopeData ? slopeData.slopePercent : null;
-        const { factors, finalScore } = calculateRisk(elevation, slopePercent, precipData, histPrecip, ndviData);
+        const { factors, finalScore } = calculateRisk(elevation, slopePercent, precipData, histPrecip, ndviData, landCoverData);
 
         let riskLevel, riskClass;
         if (finalScore >= 7) {
@@ -597,10 +587,14 @@ async function analyzeFloodRisk() {
                 (token ? 'ممکن است توکن نامعتبر باشد یا سرویس در دسترس نباشد.' : 'برای دریافت، توکن NASA را وارد کنید.') + '</p>';
         }
 
+        if (!landCoverData) {
+            detailsHtml += '<p style="color: #d69e2e; margin-top: 10px;">⚠️ داده کاربری اراضی دریافت نشد. ' +
+                (token ? 'ممکن است محصول MCD12Q1 برای این سال موجود نباشد.' : 'برای دریافت، توکن NASA را وارد کنید.') + '</p>';
+        }
+
         document.getElementById('details').innerHTML = detailsHtml;
         resultEl.classList.add('show', riskClass);
 
-        // جابجایی نقشه به موقعیت تحلیل‌شده
         if (map) {
             map.setView([lat, lon], 12);
             updateMarker(lat, lon);
@@ -621,5 +615,5 @@ async function analyzeFloodRisk() {
 window.addEventListener('DOMContentLoaded', function() {
     loadToken();
     initMap();
-    console.log('برنامه با موفقیت راه‌اندازی شد 🚀');
+    console.log('برنامه با موفقیت راه‌اندازی شد 🚀 (فاز ۲)');
 });
