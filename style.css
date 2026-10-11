@@ -88,8 +88,13 @@ button {
 
 .result.show { display: block; }
 
-.result.low { 
+.result.very-low { 
     background: #c6f6d5; 
+    border-left: 5px solid #22543d; 
+}
+
+.result.low { 
+    background: #e6fffa; 
     border-left: 5px solid #38a169; 
 }
 
@@ -99,6 +104,11 @@ button {
 }
 
 .result.high { 
+    background: #feebc8; 
+    border-left: 5px solid #dd6b20; 
+}
+
+.result.very-high { 
     background: #fed7d7; 
     border-left: 5px solid #e53e3e; 
 }
