@@ -1,9 +1,10 @@
 // ============================================================
-// متغیرهای جهانی نقشه
+// متغیرهای جهانی
 // ============================================================
 let map = null;
 let marker = null;
 let analysisCircle = null;
+let lastAnalysis = null;
 
 // ============================================================
 // راه‌اندازی نقشه Leaflet
@@ -34,7 +35,7 @@ function initMap() {
 }
 
 // ============================================================
-// به‌روزرسانی مارکر و دایره روی نقشه
+// به‌روزرسانی مارکر
 // ============================================================
 function updateMarker(lat, lon) {
     if (!map) return;
@@ -523,7 +524,7 @@ async function analyzeFloodRisk() {
     const loadingEl = document.getElementById('loading');
     const btn = document.getElementById('analyzeBtn');
 
-        resultEl.classList.remove('show', 'very-low', 'low', 'medium', 'high', 'very-high');
+    resultEl.classList.remove('show', 'very-low', 'low', 'medium', 'high', 'very-high');
 
     const lat = parseFloat(document.getElementById('lat').value);
     const lon = parseFloat(document.getElementById('lon').value);
@@ -559,7 +560,7 @@ async function analyzeFloodRisk() {
         const slopePercent = slopeData ? slopeData.slopePercent : null;
         const { factors, finalScore } = calculateRisk(elevation, slopePercent, precipData, histPrecip, ndviData, landCoverData);
 
-                let riskLevel, riskClass, riskAdvice;
+        let riskLevel, riskClass, riskAdvice;
         if (finalScore >= 8) {
             riskLevel = '🔴 ریسک خیلی زیاد';
             riskClass = 'very-high';
@@ -582,7 +583,7 @@ async function analyzeFloodRisk() {
             riskAdvice = 'ریسک سیل در این منطقه بسیار پایین است.';
         }
 
-               document.getElementById('riskLevel').textContent = riskLevel;
+        document.getElementById('riskLevel').textContent = riskLevel;
         document.getElementById('riskScore').innerHTML = 
             `<strong>نمره ریسک: ${finalScore.toFixed(2)} از ۱۰</strong>` +
             `<p style="margin-top: 10px; font-size: 14px; color: #4a5568; line-height: 1.6;">${riskAdvice}</p>`;
@@ -605,7 +606,9 @@ async function analyzeFloodRisk() {
                 (token ? 'ممکن است محصول MCD12Q1 برای این سال موجود نباشد.' : 'برای دریافت، توکن NASA را وارد کنید.') + '</p>';
         }
 
-                // ذخیره اطلاعات برای PDF
+        document.getElementById('details').innerHTML = detailsHtml;
+
+        // ذخیره اطلاعات برای PDF
         lastAnalysis = {
             lat: lat,
             lon: lon,
@@ -614,8 +617,7 @@ async function analyzeFloodRisk() {
             riskAdvice: riskAdvice,
             factors: factors
         };
-        
-        document.getElementById('details').innerHTML = detailsHtml;
+
         resultEl.classList.add('show', riskClass);
 
         if (map) {
@@ -633,19 +635,6 @@ async function analyzeFloodRisk() {
 }
 
 // ============================================================
-// راه‌اندازی اولیه
-// ============================================================
-window.addEventListener('DOMContentLoaded', function() {
-    loadToken();
-    initMap();
-    console.log('برنامه با موفقیت راه‌اندازی شد 🚀 (فاز ۲)');
-
-    // ============================================================
-// ذخیره آخرین تحلیل برای استفاده در PDF
-// ============================================================
-let lastAnalysis = null;
-
-// ============================================================
 // تولید و دانلود PDF
 // ============================================================
 async function downloadPDF() {
@@ -659,7 +648,6 @@ async function downloadPDF() {
     btn.textContent = '⏳ در حال تولید PDF...';
 
     try {
-        // ========== ۱. آماده‌سازی jsPDF ==========
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({
             orientation: 'portrait',
@@ -667,81 +655,60 @@ async function downloadPDF() {
             format: 'a4'
         });
 
-        // ابعاد صفحه A4
         const pageWidth = 210;
         const pageHeight = 297;
         const margin = 15;
         const contentWidth = pageWidth - 2 * margin;
 
-        // ========== ۲. افزودن فونت فارسی ==========
-        // فونت Vazirmatn را از CDN دریافت می‌کنیم
-        try {
-            const fontUrl = 'https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/ttf/Vazirmatn-Regular.ttf';
-            const fontResponse = await fetch(fontUrl);
-            const fontBuffer = await fontResponse.arrayBuffer();
-            
-            // تبدیل به Base64
-            const fontBase64 = arrayBufferToBase64(fontBuffer);
-            
-            doc.addFileToVFS('Vazirmatn-Regular.ttf', fontBase64);
-            doc.addFont('Vazirmatn-Regular.ttf', 'Vazirmatn', 'normal');
-            doc.setFont('Vazirmatn');
-        } catch (fontErr) {
-            console.warn('خطا در بارگذاری فونت:', fontErr);
-            // ادامه بدون فونت فارسی
-        }
-
-        // ========== ۳. سربرگ ==========
-        doc.setFillColor(49, 130, 206); // آبی
+        // سربرگ
+        doc.setFillColor(49, 130, 206);
         doc.rect(0, 0, pageWidth, 30, 'F');
-        
+
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(20);
         doc.text('Flood Risk Assessment Report', pageWidth / 2, 15, { align: 'center' });
-        
+
         doc.setFontSize(10);
         const now = new Date();
         const dateStr = now.toLocaleDateString('fa-IR') + ' - ' + now.toLocaleTimeString('fa-IR');
         doc.text(dateStr, pageWidth / 2, 24, { align: 'center' });
 
-        // ========== ۴. مختصات ==========
+        // مختصات
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(12);
         let yPos = 45;
-        
+
         doc.setFont('helvetica', 'bold');
-        doc.text('Location / Mokan:', margin, yPos);
+        doc.text('Location:', margin, yPos);
         doc.setFont('helvetica', 'normal');
         yPos += 7;
-        
+
         doc.text(`Latitude: ${lastAnalysis.lat.toFixed(4)}`, margin, yPos);
         doc.text(`Longitude: ${lastAnalysis.lon.toFixed(4)}`, margin + 80, yPos);
         yPos += 12;
 
-        // ========== ۵. نمره نهایی ==========
-        // کادر رنگی برای نمره
+        // نمره نهایی
         const scoreColor = getScoreRGB(lastAnalysis.finalScore);
         doc.setFillColor(scoreColor[0], scoreColor[1], scoreColor[2]);
         doc.roundedRect(margin, yPos, contentWidth, 25, 3, 3, 'F');
-        
+
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(16);
         doc.setFont('helvetica', 'bold');
         doc.text(`Risk Score: ${lastAnalysis.finalScore.toFixed(2)} / 10`, margin + 5, yPos + 10);
-        
+
         doc.setFontSize(12);
         doc.text(`Risk Level: ${getRiskLevelEn(lastAnalysis.finalScore)}`, margin + 5, yPos + 18);
-        
+
         yPos += 35;
 
-        // ========== ۶. نقشه ==========
+        // نقشه
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text('Map / Naghsheh:', margin, yPos);
+        doc.text('Map:', margin, yPos);
         yPos += 5;
 
-        // تبدیل نقشه به تصویر
         try {
             const mapElement = document.getElementById('map');
             const canvas = await html2canvas(mapElement, {
@@ -751,7 +718,7 @@ async function downloadPDF() {
                 backgroundColor: '#ffffff'
             });
             const mapImage = canvas.toDataURL('image/png');
-            
+
             const mapHeight = 70;
             doc.addImage(mapImage, 'PNG', margin, yPos, contentWidth, mapHeight);
             yPos += mapHeight + 10;
@@ -763,20 +730,18 @@ async function downloadPDF() {
             yPos += 10;
         }
 
-        // ========== ۷. جدول پارامترها ==========
+        // جدول پارامترها
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text('Parameters / Parametr-ha:', margin, yPos);
+        doc.text('Parameters:', margin, yPos);
         yPos += 7;
 
-        // سربرگ جدول
         const colWidths = [contentWidth * 0.35, contentWidth * 0.35, contentWidth * 0.15, contentWidth * 0.15];
         const colX = [margin, margin + colWidths[0], margin + colWidths[0] + colWidths[1], margin + colWidths[0] + colWidths[1] + colWidths[2]];
-        
-        // پس‌زمینه سربرگ
+
         doc.setFillColor(226, 232, 240);
         doc.rect(margin, yPos, contentWidth, 8, 'F');
-        
+
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.text('Parameter', colX[0] + 2, yPos + 5.5);
@@ -785,56 +750,48 @@ async function downloadPDF() {
         doc.text('Weight', colX[3] + 2, yPos + 5.5);
         yPos += 8;
 
-        // ردیف‌های جدول
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
-        
+
         lastAnalysis.factors.forEach((f, i) => {
-            // پس‌زمینه ردیف‌های زوج
             if (i % 2 === 0) {
                 doc.setFillColor(247, 250, 252);
                 doc.rect(margin, yPos, contentWidth, 8, 'F');
             }
-            
-            // متن (متن انگلیسی برای سازگاری با jsPDF)
+
             const paramEn = getParamNameEn(f.name);
             const valueText = getValueEn(f.value);
-            
+
             doc.text(paramEn, colX[0] + 2, yPos + 5.5);
             doc.text(valueText, colX[1] + 2, yPos + 5.5);
             doc.text(`${f.score}/10`, colX[2] + 2, yPos + 5.5);
             doc.text(`${f.weight}`, colX[3] + 2, yPos + 5.5);
-            
+
             yPos += 8;
         });
 
-        // خط پایانی جدول
         doc.setDrawColor(200, 200, 200);
         doc.line(margin, yPos, margin + contentWidth, yPos);
         yPos += 10;
 
-        // ========== ۸. توصیه ==========
-        if (lastAnalysis.riskAdvice) {
-            doc.setFontSize(11);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Recommendation / Towsiyeh:', margin, yPos);
-            yPos += 6;
-            
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(9);
-            
-            // توصیه انگلیسی بر اساس سطح
-            const adviceEn = getAdviceEn(lastAnalysis.finalScore);
-            const adviceLines = doc.splitTextToSize(adviceEn, contentWidth);
-            doc.text(adviceLines, margin, yPos);
-            yPos += adviceLines.length * 5 + 5;
-        }
+        // توصیه
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Recommendation:', margin, yPos);
+        yPos += 6;
 
-        // ========== ۹. پانویس ==========
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+
+        const adviceEn = getAdviceEn(lastAnalysis.finalScore);
+        const adviceLines = doc.splitTextToSize(adviceEn, contentWidth);
+        doc.text(adviceLines, margin, yPos);
+
+        // پانویس
         const footerY = pageHeight - 20;
         doc.setDrawColor(200, 200, 200);
         doc.line(margin, footerY - 5, margin + contentWidth, footerY - 5);
-        
+
         doc.setFontSize(8);
         doc.setTextColor(100, 100, 100);
         doc.setFont('helvetica', 'italic');
@@ -849,7 +806,7 @@ async function downloadPDF() {
             footerY + 5
         );
 
-        // ========== ۱۰. ذخیره فایل ==========
+        // ذخیره فایل
         const fileName = `flood-risk-${lastAnalysis.lat.toFixed(4)}-${lastAnalysis.lon.toFixed(4)}-${Date.now()}.pdf`;
         doc.save(fileName);
 
@@ -867,22 +824,12 @@ async function downloadPDF() {
 // ============================================================
 // توابع کمکی PDF
 // ============================================================
-function arrayBufferToBase64(buffer) {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    return btoa(binary);
-}
-
 function getScoreRGB(score) {
-    if (score >= 8) return [229, 62, 62];      // قرمز
-    if (score >= 6) return [221, 107, 32];     // نارنجی
-    if (score >= 4) return [214, 158, 46];     // زرد
-    if (score >= 2) return [56, 161, 105];     // سبز روشن
-    return [34, 84, 61];                        // سبز تیره
+    if (score >= 8) return [229, 62, 62];
+    if (score >= 6) return [221, 107, 32];
+    if (score >= 4) return [214, 158, 46];
+    if (score >= 2) return [56, 161, 105];
+    return [34, 84, 61];
 }
 
 function getRiskLevelEn(score) {
@@ -920,4 +867,12 @@ function getValueEn(faValue) {
         .replace(/میلی‌متر/g, 'mm')
         .replace(/%/g, '%');
 }
+
+// ============================================================
+// راه‌اندازی اولیه
+// ============================================================
+window.addEventListener('DOMContentLoaded', function() {
+    loadToken();
+    initMap();
+    console.log('برنامه با موفقیت راه‌اندازی شد 🚀 (فاز ۳)');
 });
