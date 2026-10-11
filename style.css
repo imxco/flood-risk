@@ -192,3 +192,24 @@ button {
     #map { height: 300px; }
     h1 { font-size: 20px; }
 }
+
+/* دکمه PDF */
+.btn-pdf {
+    background: #2f855a;
+    color: white;
+    margin-top: 20px;
+    padding: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.btn-pdf:hover {
+    background: #22543d;
+}
+
+.btn-pdf:disabled {
+    background: #a0aec0;
+    cursor: not-allowed;
+}
