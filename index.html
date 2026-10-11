@@ -49,14 +49,19 @@
         <div class="loading" id="loading">⏳ در حال دریافت داده‌ها...</div>
         <div class="error" id="error"></div>
 
-        <div class="result" id="result">
+                <div class="result" id="result">
             <h2 id="riskLevel"></h2>
             <div id="riskScore"></div>
             <div id="details"></div>
+            <button id="pdfBtn" onclick="downloadPDF()" class="btn-pdf">📄 دانلود گزارش PDF</button>
             <p class="note">⚠️ این تحلیل بر اساس داده‌های جهانی و مدل‌های ساده‌شده انجام شده و جایگزین مطالعات دقیق هیدرولوژیکی نیست.</p>
         </div>
     </div>
-
+    
+    <!-- کتابخانه‌های PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
     <!-- Leaflet JS (نقشه تعاملی) -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
