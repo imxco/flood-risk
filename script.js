@@ -923,11 +923,13 @@ async function downloadPDF() {
         const mapElement = document.getElementById('map');
 
         try {
-            const mapCanvas = await html2canvas(mapElement, {
+                   const mapCanvas = await html2canvas(mapElement, {
                 useCORS: true,
                 allowTaint: true,
-                scale: 2,
-                backgroundColor: '#ffffff'
+                scale: 4,
+                backgroundColor: '#ffffff',
+                logging: false,
+                imageTimeout: 0
             });
             const mapImg = document.createElement('img');
             mapImg.src = mapCanvas.toDataURL('image/png');
@@ -983,13 +985,15 @@ async function downloadPDF() {
         await new Promise(resolve => setTimeout(resolve, 500));
 
         const template = document.getElementById('pdfTemplate');
-        const canvas = await html2canvas(template, {
+               const canvas = await html2canvas(template, {
             useCORS: true,
             allowTaint: true,
-            scale: 2,
+            scale: 4,
             backgroundColor: '#ffffff',
             logging: false,
-            windowWidth: 800
+            windowWidth: 800,
+            imageTimeout: 0,
+            removeContainer: true
         });
 
         const jsPDF = window.jspdf.jsPDF;
@@ -1010,7 +1014,7 @@ async function downloadPDF() {
 
         if (imgHeight <= maxPageHeight) {
             // در یک صفحه جا می‌شود
-            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            const imgData = canvas.toDataURL('image/jpeg', 1.0);
             doc.addImage(imgData, 'JPEG', margin, margin, imgWidth, imgHeight);
         } else {
             // چند صفحه - مدیریت هوشمند
@@ -1044,7 +1048,7 @@ async function downloadPDF() {
                     0, 0, canvas.width, srcHeight
                 );
 
-                const pageData = pageCanvas.toDataURL('image/jpeg', 0.95);
+                const pageData = pageCanvas.toDataURL('image/jpeg', 1.0);
                 const displayHeight = (srcHeight * imgWidth) / canvas.width;
                 doc.addImage(pageData, 'JPEG', margin, margin, imgWidth, Math.min(displayHeight, maxPageHeight));
             }
