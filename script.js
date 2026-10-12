@@ -69,13 +69,13 @@ function updateMarker(lat, lon) {
         weight: 2
     }).addTo(map);
 
-    marker.bindPopup(`
-        <div style="text-align: center; font-family: Tahoma;">
-            <strong>موقعیت تحلیل</strong><br>
-            ${lat.toFixed(4)}, ${lon.toFixed(4)}<br>
-            <small>می‌توانید مارکر را جابجا کنید</small>
-        </div>
-    `).openPopup();
+    marker.bindPopup(
+        '<div style="text-align: center; font-family: Tahoma;">' +
+            '<strong>موقعیت تحلیل</strong><br>' +
+            lat.toFixed(4) + ', ' + lon.toFixed(4) + '<br>' +
+            '<small>می‌توانید مارکر را جابجا کنید</small>' +
+        '</div>'
+    ).openPopup();
 }
 
 // ============================================================
@@ -131,7 +131,7 @@ function hideError() {
 // دریافت ارتفاع
 // ============================================================
 async function getElevation(lat, lon) {
-    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`;
+    const url = 'https://api.open-meteo.com/v1/elevation?latitude=' + lat + '&longitude=' + lon;
     try {
         const res = await fetch(url);
         if (!res.ok) throw new Error('خطا در دریافت ارتفاع');
@@ -147,7 +147,7 @@ async function getElevation(lat, lon) {
 // دریافت بارش اخیر (۱۰ روز)
 // ============================================================
 async function getPrecipitation(lat, lon) {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&past_days=10&forecast_days=1&timezone=auto`;
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=precipitation_sum&past_days=10&forecast_days=1&timezone=auto';
     try {
         const res = await fetch(url);
         if (!res.ok) throw new Error('خطا در دریافت بارش');
@@ -173,12 +173,12 @@ async function getMonthlyPrecipitation(lat, lon) {
     const endYear = now.getFullYear() - 1;
     const startYear = endYear - 9;
 
-    const startDate = `${startYear}-01-01`;
-    const endDate = `${endYear}-12-31`;
+    const startDate = startYear + '-01-01';
+    const endDate = endYear + '-12-31';
 
-    console.log(`دریافت بارش از ${startDate} تا ${endDate}`);
+    console.log('دریافت بارش از ' + startDate + ' تا ' + endDate);
 
-    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&daily=precipitation_sum&timezone=auto`;
+    const url = 'https://archive-api.open-meteo.com/v1/archive?latitude=' + lat + '&longitude=' + lon + '&start_date=' + startDate + '&end_date=' + endDate + '&daily=precipitation_sum&timezone=auto';
 
     try {
         const res = await fetch(url);
@@ -221,7 +221,6 @@ async function getMonthlyPrecipitation(lat, lon) {
             arr.reduce((a, b) => a + b, 0) / arr.length
         );
 
-        // نگاشت به تقویم شمسی (تقریبی)
         const monthOrder = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1];
         const persianMonthlyAvg = monthOrder.map(m => monthlyAverages[m]);
 
@@ -257,7 +256,7 @@ async function getMonthlyPrecipitation(lat, lon) {
             },
             rainyMonthsCount: rainyMonthsCount,
             yearsCount: years.length,
-            yearRange: `${startYear}-${endYear}`,
+            yearRange: startYear + '-' + endYear,
             startDate: startDate,
             endDate: endDate
         };
@@ -302,11 +301,11 @@ async function getNDVI(lat, lon, token) {
         return null;
     }
 
-    const url = `https://modis.ornl.gov/rst/api/v1/MOD13Q1/subset` +
-        `?latitude=${lat}&longitude=${lon}` +
-        `&band=250m_16_days_NDVI` +
-        `&startDate=A2023001&endDate=A2023096` +
-        `&kmAboveBelow=1&kmLeftRight=1`;
+    const url = 'https://modis.ornl.gov/rst/api/v1/MOD13Q1/subset' +
+        '?latitude=' + lat + '&longitude=' + lon +
+        '&band=250m_16_days_NDVI' +
+        '&startDate=A2023001&endDate=A2023096' +
+        '&kmAboveBelow=1&kmLeftRight=1';
 
     console.log('NDVI Request URL:', url);
 
@@ -314,7 +313,7 @@ async function getNDVI(lat, lon, token) {
         const res = await fetch(url, {
             method: 'GET',
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': 'Bearer ' + token,
                 'Accept': 'application/json'
             }
         });
@@ -383,11 +382,11 @@ async function getLandCover(lat, lon, token) {
         return null;
     }
 
-    const url = `https://modis.ornl.gov/rst/api/v1/MCD12Q1/subset` +
-        `?latitude=${lat}&longitude=${lon}` +
-        `&band=LC_Type1` +
-        `&startDate=A2022001&endDate=A2022365` +
-        `&kmAboveBelow=1&kmLeftRight=1`;
+    const url = 'https://modis.ornl.gov/rst/api/v1/MCD12Q1/subset' +
+        '?latitude=' + lat + '&longitude=' + lon +
+        '&band=LC_Type1' +
+        '&startDate=A2022001&endDate=A2022365' +
+        '&kmAboveBelow=1&kmLeftRight=1';
 
     console.log('LandCover Request URL:', url);
 
@@ -395,7 +394,7 @@ async function getLandCover(lat, lon, token) {
         const res = await fetch(url, {
             method: 'GET',
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': 'Bearer ' + token,
                 'Accept': 'application/json'
             }
         });
@@ -437,9 +436,9 @@ async function getLandCover(lat, lon, token) {
 
         let dominantClass = null;
         let maxCount = 0;
-        for (const [code, count] of Object.entries(classCounts)) {
-            if (count > maxCount) {
-                maxCount = count;
+        for (const code in classCounts) {
+            if (classCounts[code] > maxCount) {
+                maxCount = classCounts[code];
                 dominantClass = parseInt(code);
             }
         }
@@ -467,8 +466,8 @@ async function getLandCover(lat, lon, token) {
 // ============================================================
 function getLandCoverInfo(code) {
     const mapping = {
-        1:  { name: 'جنگل سوزنی‌برگ همیشه‌سبز', nameEn: 'Evergreen Needleleaf Forest', floodScore: 1, description: 'نفوذپذیری بالا، پوشش گیاهی متراکم' },
-        2:  { name: 'جنگل پهن‌برگ همیشه‌سبز', nameEn: 'Evergreen Broadleaf Forest', floodScore: 1, description: 'نفوذپذیری بالا، پوشش گیاهی متراکم' },
+        1:  { name: 'جنگل سوزنی‌برگ همیشه‌سبز', nameEn: 'Evergreen Needleleaf Forest', floodScore: 1, description: 'نفوذپذیری بالا' },
+        2:  { name: 'جنگل پهن‌برگ همیشه‌سبز', nameEn: 'Evergreen Broadleaf Forest', floodScore: 1, description: 'نفوذپذیری بالا' },
         3:  { name: 'جنگل سوزنی‌برگ خزان‌کننده', nameEn: 'Deciduous Needleleaf Forest', floodScore: 2, description: 'نفوذپذیری خوب' },
         4:  { name: 'جنگل پهن‌برگ خزان‌کننده', nameEn: 'Deciduous Broadleaf Forest', floodScore: 2, description: 'نفوذپذیری خوب' },
         5:  { name: 'جنگل مختلط', nameEn: 'Mixed Forest', floodScore: 2, description: 'نفوذپذیری خوب' },
@@ -477,13 +476,13 @@ function getLandCoverInfo(code) {
         8:  { name: 'ساوانای چوبی', nameEn: 'Woody Savannas', floodScore: 5, description: 'نفوذپذیری متوسط' },
         9:  { name: 'ساوانا', nameEn: 'Savannas', floodScore: 6, description: 'نفوذپذیری کم' },
         10: { name: 'مرتع', nameEn: 'Grasslands', floodScore: 6, description: 'نفوذپذیری کم' },
-        11: { name: 'تالاب دائمی', nameEn: 'Permanent Wetlands', floodScore: 9, description: 'منطقه آبی، ریسک بالا' },
-        12: { name: 'زمین‌های زراعی', nameEn: 'Croplands', floodScore: 7, description: 'نفوذپذیری کم، رواناب بالا' },
-        13: { name: 'زمین شهری و ساخته‌شده', nameEn: 'Urban and Built-up', floodScore: 10, description: 'سطوح نفوذناپذیر، بالاترین ریسک' },
-        14: { name: 'زراعت/پوشش طبیعی موزاییکی', nameEn: 'Cropland/Natural Vegetation Mosaic', floodScore: 6, description: 'مختلط' },
-        15: { name: 'برف و یخ دائمی', nameEn: 'Permanent Snow and Ice', floodScore: 3, description: 'ذوب برف می‌تواند سیل ایجاد کند' },
+        11: { name: 'تالاب دائمی', nameEn: 'Permanent Wetlands', floodScore: 9, description: 'منطقه آبی' },
+        12: { name: 'زمین‌های زراعی', nameEn: 'Croplands', floodScore: 7, description: 'رواناب بالا' },
+        13: { name: 'زمین شهری و ساخته‌شده', nameEn: 'Urban and Built-up', floodScore: 10, description: 'نفوذناپذیر' },
+        14: { name: 'زراعت/پوشش طبیعی', nameEn: 'Cropland/Natural Vegetation Mosaic', floodScore: 6, description: 'مختلط' },
+        15: { name: 'برف و یخ دائمی', nameEn: 'Permanent Snow and Ice', floodScore: 3, description: 'ذوب برف' },
         16: { name: 'زمین بایر', nameEn: 'Barren or Sparsely Vegetated', floodScore: 4, description: 'نفوذپذیری متغیر' },
-        17: { name: 'پهنه آبی', nameEn: 'Water Bodies', floodScore: 10, description: 'سطح آب، ریسک بسیار بالا' }
+        17: { name: 'پهنه آبی', nameEn: 'Water Bodies', floodScore: 10, description: 'سطح آب' }
     };
 
     return mapping[code] || {
@@ -521,7 +520,7 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
     let totalScore = 0;
     let weightSum = 0;
 
-    // ۱. ارتفاع (وزن ۳)
+    // ۱. ارتفاع
     if (elevation !== null) {
         let score;
         if (elevation < 200) score = 10;
@@ -530,12 +529,12 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         else if (elevation < 1500) score = 4;
         else if (elevation < 2000) score = 2;
         else score = 1;
-        factors.push({ name: 'ارتفاع از سطح دریا', value: `${elevation.toFixed(0)} متر`, score, weight: 3 });
+        factors.push({ name: 'ارتفاع از سطح دریا', value: elevation.toFixed(0) + ' متر', score: score, weight: 3 });
         totalScore += score * 3;
         weightSum += 3;
     }
 
-    // ۲. شیب (وزن ۳)
+    // ۲. شیب
     if (slopePercent !== null) {
         let score;
         if (slopePercent < 0.5) score = 10;
@@ -544,12 +543,12 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         else if (slopePercent < 5) score = 4;
         else if (slopePercent < 10) score = 2;
         else score = 1;
-        factors.push({ name: 'شیب زمین', value: `${slopePercent.toFixed(2)}%`, score, weight: 3 });
+        factors.push({ name: 'شیب زمین', value: slopePercent.toFixed(2) + '%', score: score, weight: 3 });
         totalScore += score * 3;
         weightSum += 3;
     }
 
-    // ۳. بارش سالانه (وزن ۴)
+    // ۳. بارش سالانه
     if (monthlyPrecip) {
         let score;
         const annual = monthlyPrecip.annualAvg;
@@ -561,16 +560,16 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         else if (annual > 150) score = 2;
         else score = 1;
         factors.push({
-            name: `بارش سالانه (میانگین ${yearsCount} سال)`,
-            value: `${annual.toFixed(0)} میلی‌متر`,
-            score,
+            name: 'بارش سالانه (میانگین ' + yearsCount + ' سال)',
+            value: annual.toFixed(0) + ' میلی‌متر',
+            score: score,
             weight: 4
         });
         totalScore += score * 4;
         weightSum += 4;
     }
 
-    // ۴. شاخص تمرکز بارش (PCI) - وزن ۳
+    // ۴. PCI
     if (monthlyPrecip) {
         const pci = monthlyPrecip.pci;
         const pciScore = getPCIScore(pci);
@@ -578,7 +577,7 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
 
         factors.push({
             name: 'شاخص تمرکز بارش (PCI)',
-            value: `${pci.toFixed(1)} - ${pciLabel.text}`,
+            value: pci.toFixed(1) + ' - ' + pciLabel.text,
             score: pciScore,
             weight: 3
         });
@@ -586,7 +585,7 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         weightSum += 3;
     }
 
-    // ۵. بارش اخیر (وزن ۲)
+    // ۵. بارش اخیر
     if (precipData) {
         let score;
         const avg = precipData.avg;
@@ -595,12 +594,12 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         else if (avg > 1) score = 6;
         else if (avg > 0.5) score = 4;
         else score = 2;
-        factors.push({ name: 'بارش میانگین ۱۰ روز اخیر', value: `${avg.toFixed(2)} میلی‌متر`, score, weight: 2 });
+        factors.push({ name: 'بارش میانگین ۱۰ روز اخیر', value: avg.toFixed(2) + ' میلی‌متر', score: score, weight: 2 });
         totalScore += score * 2;
         weightSum += 2;
     }
 
-    // ۶. NDVI (وزن ۳)
+    // ۶. NDVI
     if (ndviData) {
         let score;
         const ndvi = ndviData.avg;
@@ -612,18 +611,18 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         else if (ndvi < 0.5) score = 3;
         else if (ndvi < 0.6) score = 2;
         else score = 1;
-        factors.push({ name: 'شاخص پوشش گیاهی (NDVI)', value: ndvi.toFixed(3), score, weight: 3 });
+        factors.push({ name: 'شاخص پوشش گیاهی (NDVI)', value: ndvi.toFixed(3), score: score, weight: 3 });
         totalScore += score * 3;
         weightSum += 3;
     }
 
-    // ۷. کاربری اراضی (وزن ۴)
+    // ۷. کاربری اراضی
     if (landCoverData) {
         const score = landCoverData.floodScore;
         factors.push({
             name: 'کاربری اراضی',
-            value: `${landCoverData.name} (کد ${landCoverData.code})`,
-            score,
+            value: landCoverData.name + ' (کد ' + landCoverData.code + ')',
+            score: score,
             weight: 4
         });
         totalScore += score * 4;
@@ -631,7 +630,7 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
     }
 
     const finalScore = weightSum > 0 ? totalScore / weightSum : 0;
-    return { factors, finalScore };
+    return { factors: factors, finalScore: finalScore };
 }
 
 // ============================================================
@@ -708,24 +707,23 @@ function drawRainChart(monthlyData) {
         }
     });
 
-    // به‌روزرسانی عنوان با بازه تاریخ
     const chartTitle = document.getElementById('chartTitle');
     if (chartTitle && monthlyData.yearRange) {
-        chartTitle.textContent = `📊 میانگین بارش ماهانه (${monthlyData.yearRange})`;
+        chartTitle.textContent = '📊 میانگین بارش ماهانه (' + monthlyData.yearRange + ')';
     }
 
     const pciLabel = getPCILabel(monthlyData.pci);
-        const infoHtml = 
+    const infoHtml =
         '<div><strong>بازه تحلیل:</strong> ' + monthlyData.yearRange + ' (' + monthlyData.yearsCount + ' سال)</div>' +
         '<div><strong>بارش سالانه (میانگین ' + monthlyData.yearsCount + ' سال):</strong> ' + monthlyData.annualAvg.toFixed(0) + ' میلی‌متر</div>' +
         '<div><strong>پرباران‌ترین ماه:</strong> ' + monthlyData.maxMonth.name + ' با ' + monthlyData.maxMonth.value.toFixed(1) + ' میلی‌متر</div>' +
         '<div><strong>تعداد ماه‌های پرباران:</strong> ' + monthlyData.rainyMonthsCount + ' ماه</div>' +
-        '<div><strong>شاخص تمرکز بارش (PCI):</strong> ' + monthlyData.pci.toFixed(1) + 
+        '<div><strong>شاخص تمرکز بارش (PCI):</strong> ' + monthlyData.pci.toFixed(1) +
             ' <span class="pci-badge ' + pciLabel.class + '">' + pciLabel.text + '</span>' +
         '</div>' +
-        '<div style="font-size: 12px; color: #718096; margin-top: 8px;">PCI پایین‌تر = بارش پخش‌شده در سال (ریسک سیل کمتر) | PCI بالاتر = بارش متمرکز (ریسک سیل بیشتر)</div>';
-    document.getElementById('chartInfo').innerHTML = infoHtml;
+        '<div style="font-size: 12px; color: #718096; margin-top: 8px;">PCI پایین‌تر = بارش پخش‌شده (ریسک کمتر) | PCI بالاتر = بارش متمرکز (ریسک بیشتر)</div>';
 
+    document.getElementById('chartInfo').innerHTML = infoHtml;
     chartSection.style.display = 'block';
 }
 
@@ -756,7 +754,7 @@ async function analyzeFloodRisk() {
     const token = getToken();
 
     try {
-        const [elevation, slopeData, precipData, monthlyPrecip, ndviData, landCoverData] = await Promise.all([
+        const results = await Promise.all([
             getElevation(lat, lon),
             estimateSlope(lat, lon),
             getPrecipitation(lat, lon),
@@ -764,6 +762,13 @@ async function analyzeFloodRisk() {
             getNDVI(lat, lon, token),
             getLandCover(lat, lon, token)
         ]);
+
+        const elevation = results[0];
+        const slopeData = results[1];
+        const precipData = results[2];
+        const monthlyPrecip = results[3];
+        const ndviData = results[4];
+        const landCoverData = results[5];
 
         loadingEl.style.display = 'none';
 
@@ -774,9 +779,9 @@ async function analyzeFloodRisk() {
         }
 
         const slopePercent = slopeData ? slopeData.slopePercent : null;
-        const { factors, finalScore } = calculateRisk(
-            elevation, slopePercent, precipData, monthlyPrecip, ndviData, landCoverData
-        );
+        const risk = calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviData, landCoverData);
+        const factors = risk.factors;
+        const finalScore = risk.finalScore;
 
         let riskLevel, riskClass, riskAdvice;
         if (finalScore >= 8) {
@@ -803,25 +808,25 @@ async function analyzeFloodRisk() {
 
         document.getElementById('riskLevel').textContent = riskLevel;
         document.getElementById('riskScore').innerHTML =
-            `<strong>نمره ریسک: ${finalScore.toFixed(2)} از ۱۰</strong>` +
-            `<p style="margin-top: 10px; font-size: 14px; color: #4a5568; line-height: 1.6;">${riskAdvice}</p>`;
+            '<strong>نمره ریسک: ' + finalScore.toFixed(2) + ' از ۱۰</strong>' +
+            '<p style="margin-top: 10px; font-size: 14px; color: #4a5568; line-height: 1.6;">' + riskAdvice + '</p>';
 
         let detailsHtml = '<h3 style="margin: 15px 0 10px;">📊 جزئیات پارامترها:</h3>';
         factors.forEach(f => {
-            detailsHtml += `<div class="param-row">
-                <span>${f.name}</span>
-                <span>${f.value} (نمره: ${f.score}/10، وزن: ${f.weight})</span>
-            </div>`;
+            detailsHtml += '<div class="param-row">' +
+                '<span>' + f.name + '</span>' +
+                '<span>' + f.value + ' (نمره: ' + f.score + '/10، وزن: ' + f.weight + ')</span>' +
+            '</div>';
         });
 
         if (!ndviData) {
             detailsHtml += '<p style="color: #d69e2e; margin-top: 10px;">⚠️ داده NDVI دریافت نشد. ' +
-                (token ? 'ممکن است توکن نامعتبر باشد یا سرویس در دسترس نباشد.' : 'برای دریافت، توکن NASA را وارد کنید.') + '</p>';
+                (token ? 'ممکن است توکن نامعتبر باشد.' : 'برای دریافت، توکن NASA را وارد کنید.') + '</p>';
         }
 
         if (!landCoverData) {
             detailsHtml += '<p style="color: #d69e2e; margin-top: 10px;">⚠️ داده کاربری اراضی دریافت نشد. ' +
-                (token ? 'ممکن است محصول MCD12Q1 برای این سال موجود نباشد.' : 'برای دریافت، توکن NASA را وارد کنید.') + '</p>';
+                (token ? 'ممکن است محصول MCD12Q1 موجود نباشد.' : 'برای دریافت، توکن NASA را وارد کنید.') + '</p>';
         }
 
         document.getElementById('details').innerHTML = detailsHtml;
@@ -895,7 +900,7 @@ async function downloadPDF() {
         }
 
         document.getElementById('pdfRiskLevel').textContent = riskText;
-        document.getElementById('pdfScore').textContent = `نمره ریسک: ${lastAnalysis.finalScore.toFixed(2)} از ۱۰`;
+        document.getElementById('pdfScore').textContent = 'نمره ریسک: ' + lastAnalysis.finalScore.toFixed(2) + ' از ۱۰';
         document.getElementById('pdfScoreBox').style.background = riskColor;
         document.getElementById('pdfAdvice').textContent = lastAnalysis.riskAdvice;
 
@@ -905,12 +910,11 @@ async function downloadPDF() {
         lastAnalysis.factors.forEach((f, i) => {
             const row = document.createElement('tr');
             row.style.background = i % 2 === 0 ? '#f7fafc' : 'white';
-            row.innerHTML = `
-                <td style="padding: 8px; border: 1px solid #cbd5e0;">${f.name}</td>
-                <td style="padding: 8px; border: 1px solid #cbd5e0;">${f.value}</td>
-                <td style="padding: 8px; border: 1px solid #cbd5e0; text-align: center;">${f.score}/10</td>
-                <td style="padding: 8px; border: 1px solid #cbd5e0; text-align: center;">${f.weight}</td>
-            `;
+            row.innerHTML =
+                '<td style="padding: 6px; border: 1px solid #cbd5e0;">' + f.name + '</td>' +
+                '<td style="padding: 6px; border: 1px solid #cbd5e0;">' + f.value + '</td>' +
+                '<td style="padding: 6px; border: 1px solid #cbd5e0; text-align: center;">' + f.score + '/10</td>' +
+                '<td style="padding: 6px; border: 1px solid #cbd5e0; text-align: center;">' + f.weight + '</td>';
             tbody.appendChild(row);
         });
 
@@ -947,7 +951,9 @@ async function downloadPDF() {
                 const chartImg = document.createElement('img');
                 chartImg.src = chartCanvas.toDataURL('image/png');
                 chartImg.style.width = '100%';
-                chartImg.style.maxWidth = '600px';
+                chartImg.style.maxWidth = '380px';
+                chartImg.style.margin = '0 auto';
+                chartImg.style.display = 'block';
                 pdfChartImage.innerHTML = '';
                 pdfChartImage.appendChild(chartImg);
 
@@ -955,15 +961,14 @@ async function downloadPDF() {
                 const mp = lastAnalysis.monthlyPrecip;
                 const infoDiv = document.createElement('div');
                 infoDiv.style.marginTop = '10px';
-                infoDiv.style.fontSize = '13px';
+                infoDiv.style.fontSize = '12px';
                 infoDiv.style.lineHeight = '1.8';
                 infoDiv.style.textAlign = 'right';
-                infoDiv.innerHTML = `
-                    <div><strong>بازه تحلیل:</strong> ${mp.yearRange} (${mp.yearsCount} سال)</div>
-                    <div><strong>بارش سالانه:</strong> ${mp.annualAvg.toFixed(0)} میلی‌متر</div>
-                    <div><strong>پرباران‌ترین ماه:</strong> ${mp.maxMonth.name} با ${mp.maxMonth.value.toFixed(1)} میلی‌متر</div>
-                    <div><strong>شاخص تمرکز بارش (PCI):</strong> ${mp.pci.toFixed(1)} - ${pciLabel.text}</div>
-                `;
+                infoDiv.innerHTML =
+                    '<div><strong>بازه تحلیل:</strong> ' + mp.yearRange + ' (' + mp.yearsCount + ' سال)</div>' +
+                    '<div><strong>بارش سالانه:</strong> ' + mp.annualAvg.toFixed(0) + ' میلی‌متر</div>' +
+                    '<div><strong>پرباران‌ترین ماه:</strong> ' + mp.maxMonth.name + ' با ' + mp.maxMonth.value.toFixed(1) + ' میلی‌متر</div>' +
+                    '<div><strong>شاخص تمرکز بارش (PCI):</strong> ' + mp.pci.toFixed(1) + ' - ' + pciLabel.text + '</div>';
                 pdfChartImage.appendChild(infoDiv);
 
                 pdfChartContainer.style.display = 'block';
@@ -987,7 +992,7 @@ async function downloadPDF() {
             windowWidth: 800
         });
 
-        const { jsPDF } = window.jspdf;
+        const jsPDF = window.jspdf.jsPDF;
         const doc = new jsPDF({
             orientation: 'portrait',
             unit: 'mm',
@@ -996,25 +1001,37 @@ async function downloadPDF() {
 
         const pageWidth = 210;
         const pageHeight = 297;
-        const margin = 10;
+        const margin = 8;
         const contentWidth = pageWidth - 2 * margin;
+        const maxPageHeight = pageHeight - 2 * margin;
 
         const imgWidth = contentWidth;
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-        if (imgHeight <= pageHeight - 2 * margin) {
+        if (imgHeight <= maxPageHeight) {
+            // در یک صفحه جا می‌شود
             const imgData = canvas.toDataURL('image/jpeg', 0.95);
             doc.addImage(imgData, 'JPEG', margin, margin, imgWidth, imgHeight);
         } else {
-            const totalPages = Math.ceil(imgHeight / (pageHeight - 2 * margin));
-            const pageContentHeight = pageHeight - 2 * margin;
-            const pageCanvasHeight = (pageContentHeight / imgHeight) * canvas.height;
+            // چند صفحه - مدیریت هوشمند
+            const totalPages = Math.ceil(imgHeight / maxPageHeight);
+            const lastPageUsed = imgHeight - (totalPages - 1) * maxPageHeight;
+            const lastPageRatio = lastPageUsed / maxPageHeight;
 
-            for (let page = 0; page < totalPages; page++) {
+            let actualPages = totalPages;
+            let pageSliceHeight = maxPageHeight;
+
+            // اگر صفحه آخر کمتر از ۳۰٪ پر است، همه را در صفحه‌های کمتر جا می‌دهیم
+            if (lastPageRatio < 0.3 && totalPages > 1) {
+                actualPages = totalPages - 1;
+                pageSliceHeight = imgHeight / actualPages;
+            }
+
+            for (let page = 0; page < actualPages; page++) {
                 if (page > 0) doc.addPage();
 
-                const srcY = page * pageCanvasHeight;
-                const srcHeight = Math.min(pageCanvasHeight, canvas.height - srcY);
+                const srcY = (page / actualPages) * canvas.height;
+                const srcHeight = canvas.height / actualPages;
 
                 const pageCanvas = document.createElement('canvas');
                 pageCanvas.width = canvas.width;
@@ -1029,11 +1046,11 @@ async function downloadPDF() {
 
                 const pageData = pageCanvas.toDataURL('image/jpeg', 0.95);
                 const displayHeight = (srcHeight * imgWidth) / canvas.width;
-                doc.addImage(pageData, 'JPEG', margin, margin, imgWidth, displayHeight);
+                doc.addImage(pageData, 'JPEG', margin, margin, imgWidth, Math.min(displayHeight, maxPageHeight));
             }
         }
 
-        const fileName = `flood-risk-${lastAnalysis.lat.toFixed(4)}-${lastAnalysis.lon.toFixed(4)}-${Date.now()}.pdf`;
+        const fileName = 'flood-risk-' + lastAnalysis.lat.toFixed(4) + '-' + lastAnalysis.lon.toFixed(4) + '-' + Date.now() + '.pdf';
         doc.save(fileName);
 
         console.log('✅ PDF فارسی با موفقیت تولید شد:', fileName);
@@ -1053,5 +1070,5 @@ async function downloadPDF() {
 window.addEventListener('DOMContentLoaded', function() {
     loadToken();
     initMap();
-    console.log('برنامه با موفقیت راه‌اندازی شد 🚀 (نسخه نهایی با نمودار)');
+    console.log('برنامه با موفقیت راه‌اندازی شد 🚀');
 });
