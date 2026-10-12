@@ -45,6 +45,20 @@
             <div id="riskScore"></div>
             <div id="details"></div>
             
+            <div class="heatmap-section">
+                <h3>🔥 نقشه حرارتی اطراف</h3>
+                <p class="note">نقشه حرارتی ناحیه ۵ کیلومتر × ۵ کیلومتر اطراف موقعیت را نشان می‌دهد (شبکه ۵×۵).</p>
+                <button id="heatmapBtn" onclick="generateHeatMap()" class="btn-heatmap">🔥 نمایش نقشه حرارتی</button>
+                <div id="heatmapStatus" class="heatmap-status"></div>
+                <div id="heatmapLegend" class="heatmap-legend" style="display:none;">
+                    <span>راهنما:</span>
+                    <span class="legend-item"><span class="legend-color" style="background:#38a169;"></span> کم</span>
+                    <span class="legend-item"><span class="legend-color" style="background:#d69e2e;"></span> متوسط</span>
+                    <span class="legend-item"><span class="legend-color" style="background:#dd6b20;"></span> زیاد</span>
+                    <span class="legend-item"><span class="legend-color" style="background:#e53e3e;"></span> خیلی زیاد</span>
+                </div>
+            </div>
+            
             <div class="chart-section" id="chartSection" style="display:none;">
                 <h3 id="chartTitle">📊 میانگین بارش ماهانه</h3>
                 <div class="chart-container">
