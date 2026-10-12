@@ -15,20 +15,9 @@ body {
     padding: 30px; 
 }
 
-h1 { 
-    color: #1a365d; 
-    margin-bottom: 20px; 
-    text-align: center; 
-}
-
+h1 { color: #1a365d; margin-bottom: 20px; text-align: center; }
 .form-group { margin-bottom: 15px; }
-
-label { 
-    display: block; 
-    margin-bottom: 5px; 
-    font-weight: 600; 
-    color: #2d3748; 
-}
+label { display: block; margin-bottom: 5px; font-weight: 600; color: #2d3748; }
 
 input { 
     width: 100%; 
@@ -38,10 +27,7 @@ input {
     font-size: 16px; 
 }
 
-input:focus { 
-    outline: none; 
-    border-color: #3182ce; 
-}
+input:focus { outline: none; border-color: #3182ce; }
 
 button { 
     width: 100%; 
@@ -79,6 +65,19 @@ button {
 }
 .btn-pdf:hover { background: #22543d; }
 .btn-pdf:disabled { background: #a0aec0; cursor: not-allowed; }
+
+.btn-heatmap {
+    background: #c53030;
+    color: white;
+    padding: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 8px;
+    margin-top: 10px;
+    transition: background 0.2s;
+}
+.btn-heatmap:hover { background: #9b2c2c; }
+.btn-heatmap:disabled { background: #a0aec0; cursor: not-allowed; }
 
 .result { 
     margin-top: 25px; 
@@ -119,11 +118,7 @@ button {
     display: none; 
 }
 
-.note { 
-    font-size: 12px; 
-    color: #718096; 
-    margin-top: 10px; 
-}
+.note { font-size: 12px; color: #718096; margin-top: 10px; }
 
 .token-section { 
     background: #edf2f7; 
@@ -132,25 +127,14 @@ button {
     margin-bottom: 20px; 
 }
 
-.token-section h3 { 
-    font-size: 14px; 
-    color: #4a5568; 
-    margin-bottom: 10px; 
-}
+.token-section h3 { font-size: 14px; color: #4a5568; margin-bottom: 10px; }
 
-.token-status { 
-    font-size: 13px; 
-    margin-top: 8px; 
-}
+.token-status { font-size: 13px; margin-top: 8px; }
 .token-status.ok { color: #38a169; }
 .token-status.missing { color: #e53e3e; }
 
 .map-section { margin-bottom: 20px; }
-.map-section h3 {
-    font-size: 14px;
-    color: #4a5568;
-    margin-bottom: 8px;
-}
+.map-section h3 { font-size: 14px; color: #4a5568; margin-bottom: 8px; }
 
 #map {
     width: 100%;
@@ -158,6 +142,54 @@ button {
     border-radius: 8px;
     border: 2px solid #e2e8f0;
     z-index: 1;
+}
+
+/* بخش نقشه حرارتی */
+.heatmap-section {
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 2px solid rgba(0,0,0,0.1);
+}
+
+.heatmap-section h3 {
+    font-size: 16px;
+    color: #2d3748;
+    margin-bottom: 8px;
+}
+
+.heatmap-status {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #4a5568;
+    text-align: center;
+}
+
+.heatmap-legend {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-top: 15px;
+    padding: 10px;
+    background: white;
+    border-radius: 8px;
+    font-size: 13px;
+    flex-wrap: wrap;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.legend-color {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 0 0 1px #cbd5e0;
 }
 
 .chart-section {
@@ -190,9 +222,7 @@ button {
     color: #4a5568;
 }
 
-.chart-info strong {
-    color: #2d3748;
-}
+.chart-info strong { color: #2d3748; }
 
 .pci-badge {
     display: inline-block;
@@ -213,4 +243,5 @@ button {
     #map { height: 300px; }
     .chart-container { height: 250px; }
     h1 { font-size: 20px; }
+    .heatmap-legend { font-size: 11px; gap: 8px; }
 }
