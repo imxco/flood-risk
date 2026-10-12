@@ -293,14 +293,25 @@ async function estimateSlope(lat, lon) {
 }
 
 // ============================================================
-// فاصله از نزدیک‌ترین رودخانه (با چند سرور جایگزین)
+// فاصله از نزدیک‌ترین رودخانه (با کوئری گسترده)
 // ============================================================
 async function getRiverDistance(lat, lon) {
-    const radius = 10000;
+    // شعاع جستجو: ۲۰ کیلومتر
+    const radius = 20000;
 
-    const query = '[out:json][timeout:25];' +
+    // کوئری گسترده‌تر: شامل انواع مختلف آبراهه‌ها
+    // river: رودخانه
+    // stream: نهر
+    // canal: کانال
+    // drain: زهکش
+    // ditch: جوی
+    // wadi: رودخانه فصلی (مهم برای ایران)
+    // rapids: آبشارهای تند
+    // waterfall: آبشار
+    const query = '[out:json][timeout:30];' +
         '(' +
-            'way["waterway"~"river|stream|canal|drain"](around:' + radius + ',' + lat + ',' + lon + ');' +
+            'way["waterway"~"river|stream|canal|drain|ditch|wadi|rapids|waterfall"](around:' + radius + ',' + lat + ',' + lon + ');' +
+            'relation["waterway"~"river|stream|canal"](around:' + radius + ',' + lat + ',' + lon + ');' +
         ');' +
         'out geom;';
 
@@ -328,9 +339,9 @@ async function getRiverDistance(lat, lon) {
         console.log('تلاش ' + (i + 1) + ' از ' + servers.length + ': ' + serverUrl);
 
         try {
-            // Timeout 15 ثانیه برای هر سرور
+            // Timeout 20 ثانیه برای هر سرور
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const timeoutId = setTimeout(() => controller.abort(), 20000);
 
             const res = await fetch(url, {
                 method: 'GET',
@@ -342,7 +353,7 @@ async function getRiverDistance(lat, lon) {
 
             if (!res.ok) {
                 console.warn('سرور ' + serverUrl + ' خطا داد: ' + res.status);
-                continue; // سرور بعدی
+                continue;
             }
 
             const data = await res.json();
@@ -351,10 +362,11 @@ async function getRiverDistance(lat, lon) {
                 console.log('سرور ' + serverUrl + ': هیچ آبراهه‌ای یافت نشد');
                 return {
                     distance: null,
-                    distanceText: 'بیش از ۱۰ کیلومتر',
+                    distanceText: 'بیش از ۲۰ کیلومتر',
                     name: null,
                     type: null,
-                    found: false
+                    found: false,
+                    radius: radius
                 };
             }
 
@@ -365,39 +377,62 @@ async function getRiverDistance(lat, lon) {
             let nearestWaterway = null;
 
             data.elements.forEach(element => {
-                if (!element.geometry || !Array.isArray(element.geometry)) return;
-
-                element.geometry.forEach(point => {
-                    const dist = haversineDistance(lat, lon, point.lat, point.lon);
-                    if (dist < minDistance) {
-                        minDistance = dist;
-                        nearestWaterway = element;
-                    }
-                });
+                // برای way: از geometry استفاده می‌کنیم
+                if (element.type === 'way' && element.geometry && Array.isArray(element.geometry)) {
+                    element.geometry.forEach(point => {
+                        const dist = haversineDistance(lat, lon, point.lat, point.lon);
+                        if (dist < minDistance) {
+                            minDistance = dist;
+                            nearestWaterway = element;
+                        }
+                    });
+                }
+                // برای relation: از members (اگر geometry داشته باشند)
+                else if (element.type === 'relation' && element.members) {
+                    element.members.forEach(member => {
+                        if (member.geometry && Array.isArray(member.geometry)) {
+                            member.geometry.forEach(point => {
+                                const dist = haversineDistance(lat, lon, point.lat, point.lon);
+                                if (dist < minDistance) {
+                                    minDistance = dist;
+                                    nearestWaterway = element;
+                                }
+                            });
+                        }
+                    });
+                }
             });
 
             if (nearestWaterway === null) {
                 return {
                     distance: null,
-                    distanceText: 'بیش از ۱۰ کیلومتر',
+                    distanceText: 'بیش از ۲۰ کیلومتر',
                     name: null,
                     type: null,
-                    found: false
+                    found: false,
+                    radius: radius
                 };
             }
 
+            // استخراج نام و نوع
             const tags = nearestWaterway.tags || {};
             const name = tags.name || tags['name:fa'] || tags['name:en'] || 'بدون نام';
             const type = tags.waterway || 'نامشخص';
 
+            // نگاشت نوع به فارسی
             const typeMap = {
                 'river': 'رودخانه',
                 'stream': 'نهر',
                 'canal': 'کانال',
-                'drain': 'زهکش'
+                'drain': 'زهکش',
+                'ditch': 'جوی آب',
+                'wadi': 'رودخانه فصلی',
+                'rapids': 'آبشار تند',
+                'waterfall': 'آبشار'
             };
             const typeFa = typeMap[type] || type;
 
+            // فرمت فاصله
             let distanceText;
             if (minDistance < 1000) {
                 distanceText = minDistance.toFixed(0) + ' متر';
@@ -411,13 +446,13 @@ async function getRiverDistance(lat, lon) {
                 name: name,
                 type: typeFa,
                 found: true,
-                server: serverUrl
+                server: serverUrl,
+                radius: radius
             };
 
         } catch (e) {
-            // خطا (Timeout یا Abort)
             console.warn('سرور ' + serverUrl + ' خطا داد:', e.message);
-            continue; // سرور بعدی
+            continue;
         }
     }
 
