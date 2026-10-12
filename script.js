@@ -162,16 +162,25 @@ async function getPrecipitation(lat, lon) {
 // دریافت بارش تاریخی
 // ============================================================
 async function getHistoricalPrecipitation(lat, lon) {
-    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=2023-01-01&end_date=2023-12-31&daily=precipitation_sum&timezone=auto`;
+    // دریافت میانگین ۱۰ ساله (2014-2023)
+    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=2014-01-01&end_date=2023-12-31&daily=precipitation_sum&timezone=auto`;
+    
     try {
         const res = await fetch(url);
         if (!res.ok) throw new Error('خطا در دریافت بارش تاریخی');
         const data = await res.json();
         const precip = data.daily.precipitation_sum.filter(v => v !== null);
+        
         if (precip.length === 0) return null;
+        
+        // محاسبه بارش هر سال
+        const totalDays = precip.length;
+        const yearsCount = totalDays / 365;
+        
         return {
-            annual: precip.reduce((a, b) => a + b, 0),
-            maxDaily: Math.max(...precip)
+            annual: precip.reduce((a, b) => a + b, 0) / yearsCount,  // میانگین سالانه
+            maxDaily: Math.max(...precip),                           // حداکثر در ۱۰ سال
+            totalDays: totalDays
         };
     } catch (e) {
         console.warn('Historical precipitation error:', e);
