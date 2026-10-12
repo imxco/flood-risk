@@ -170,8 +170,17 @@ async function getPrecipitation(lat, lon) {
 // دریافت بارش ماهانه ۱۰ ساله (2014-2023)
 // ============================================================
 async function getMonthlyPrecipitation(lat, lon) {
-    // دریافت داده روزانه ۱۰ سال
-    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=2014-01-01&end_date=2023-12-31&daily=precipitation_sum&timezone=auto`;
+    // محاسبه پویا بازه ۱۰ سال اخیر
+    const now = new Date();
+    const endYear = now.getFullYear() - 1;  // سال قبل (چون سال جاری کامل نیست)
+    const startYear = endYear - 9;           // ۱۰ سال
+    
+    const startDate = `${startYear}-01-01`;
+    const endDate = `${endYear}-12-31`;
+    
+    console.log(`دریافت بارش از ${startDate} تا ${endDate}`);
+    
+    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&daily=precipitation_sum&timezone=auto`;
     
     try {
         const res = await fetch(url);
@@ -185,26 +194,22 @@ async function getMonthlyPrecipitation(lat, lon) {
         const times = data.daily.time;
         const precip = data.daily.precipitation_sum;
         
-        // جمع بارش هر ماه (۱۲ ماه × ۱۰ سال = ۱۲۰ مقدار)
-        const monthlyTotals = Array.from({ length: 12 }, () => []);
         const yearlyTotals = {};
         
         for (let i = 0; i < times.length; i++) {
             const date = new Date(times[i]);
-            const month = date.getMonth(); // 0-11 (ژانویه = 0)
+            const month = date.getMonth();
             const year = date.getFullYear();
             const value = precip[i];
             
             if (value === null || value === undefined) continue;
             
-            // جمع ماهانه هر سال
             if (!yearlyTotals[year]) {
                 yearlyTotals[year] = Array.from({ length: 12 }, () => 0);
             }
             yearlyTotals[year][month] += value;
         }
         
-        // میانگین بارش هر ماه در ۱۰ سال
         const monthlyAvg = Array.from({ length: 12 }, () => []);
         const years = Object.keys(yearlyTotals);
         
@@ -218,11 +223,8 @@ async function getMonthlyPrecipitation(lat, lon) {
             arr.reduce((a, b) => a + b, 0) / arr.length
         );
         
-        // مرتب‌سازی بر اساس تقویم شمسی (فروردین تا اسفند)
-        // ماه میلادی: ژانویه=0, ..., دسامبر=11
-        // ترتیب شمسی: فروردین (مارس-آپریل), ..., اسفند (فوریه-مارس)
-        // نگاشت: شمسی[0]=فروردین → میلادی مارس (2), ..., شمسی[11]=اسفند → میلادی فوریه (1)
-        const monthOrder = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1]; // مارس تا فوریه
+        // نگاشت به تقویم شمسی
+        const monthOrder = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1];
         const persianMonthlyAvg = monthOrder.map(m => monthlyAverages[m]);
         
         // بارش سالانه
@@ -231,8 +233,7 @@ async function getMonthlyPrecipitation(lat, lon) {
         );
         const annualAvg = annualTotals.reduce((a, b) => a + b, 0) / annualTotals.length;
         
-        // محاسبه شاخص تمرکز بارش (PCI)
-        // PCI = (Σ Pi² / (Σ Pi)²) × 100
+        // PCI
         const sumMonthly = persianMonthlyAvg.reduce((a, b) => a + b, 0);
         const sumSquared = persianMonthlyAvg.reduce((a, b) => a + b * b, 0);
         const pci = sumMonthly > 0 ? (sumSquared / (sumMonthly * sumMonthly)) * 100 : 0;
@@ -247,21 +248,24 @@ async function getMonthlyPrecipitation(lat, lon) {
             }
         });
         
-        // تعداد ماه‌های پرباران (بیش از ۱۰٪ بارش سالانه)
+        // تعداد ماه‌های پرباران
         const threshold = annualAvg * 0.1;
         const rainyMonthsCount = persianMonthlyAvg.filter(v => v > threshold).length;
         
         return {
-            monthlyAvg: persianMonthlyAvg,           // ۱۲ مقدار میانگین ماهانه (شمسی)
-            annualAvg: annualAvg,                    // میانگین بارش سالانه
-            pci: pci,                                // شاخص تمرکز بارش
-            maxMonth: {                              // پرباران‌ترین ماه
+            monthlyAvg: persianMonthlyAvg,
+            annualAvg: annualAvg,
+            pci: pci,
+            maxMonth: {
                 index: maxMonthIndex,
                 name: MONTH_NAMES_FA[maxMonthIndex],
                 value: maxMonthValue
             },
-            rainyMonthsCount: rainyMonthsCount,      // تعداد ماه‌های پرباران
-            yearsCount: years.length
+            rainyMonthsCount: rainyMonthsCount,
+            yearsCount: years.length,
+            yearRange: `${startYear}-${endYear}`,
+            startDate: startDate,
+            endDate: endDate
         };
         
     } catch (e) {
@@ -551,10 +555,11 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         weightSum += 3;
     }
 
-    // ۳. بارش سالانه (وزن ۴) - از میانگین ۱۰ ساله
+       // ۳. بارش سالانه (وزن ۴) - از میانگین ۱۰ ساله
     if (monthlyPrecip) {
         let score;
         const annual = monthlyPrecip.annualAvg;
+        const yearsCount = monthlyPrecip.yearsCount || 10;
         if (annual > 1000) score = 10;
         else if (annual > 700) score = 8;
         else if (annual > 500) score = 6;
@@ -562,7 +567,7 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         else if (annual > 150) score = 2;
         else score = 1;
         factors.push({ 
-            name: 'بارش سالانه (میانگین ۱۰ سال)', 
+            name: `بارش سالانه (میانگین ${yearsCount} سال)`, 
             value: `${annual.toFixed(0)} میلی‌متر`, 
             score, 
             weight: 4 
@@ -570,7 +575,6 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         totalScore += score * 4;
         weightSum += 4;
     }
-
     // ۴. شاخص تمرکز بارش (PCI) - وزن ۳
     if (monthlyPrecip) {
         const pci = monthlyPrecip.pci;
@@ -720,7 +724,13 @@ function drawRainChart(monthlyData) {
     // نمایش اطلاعات تکمیلی
     const pciLabel = getPCILabel(monthlyData.pci);
     const infoHtml = `
-        <div><strong>بارش سالانه (میانگین ۱۰ سال):</strong> ${monthlyData.annualAvg.toFixed(0)} میلی‌متر</div>
+            // به‌روزرسانی عنوان نمودار با بازه تاریخ
+    document.querySelector('.chart-section h3').textContent = 
+        `📊 میانگین بارش ماهانه (${monthlyData.yearRange})`;
+    
+    const infoHtml = `
+        <div><strong>بازه تحلیل:</strong> ${monthlyData.yearRange} (${monthlyData.yearsCount} سال)</div>
+        <div><strong>بارش سالانه (میانگین ${monthlyData.yearsCount} سال):</strong> ${monthlyData.annualAvg.toFixed(0)} میلی‌متر</div>
         <div><strong>پرباران‌ترین ماه:</strong> ${monthlyData.maxMonth.name} با ${monthlyData.maxMonth.value.toFixed(1)} میلی‌متر</div>
         <div><strong>تعداد ماه‌های پرباران:</strong> ${monthlyData.rainyMonthsCount} ماه</div>
         <div><strong>شاخص تمرکز بارش (PCI):</strong> ${monthlyData.pci.toFixed(1)} 
@@ -967,7 +977,8 @@ async function downloadPDF() {
                 infoDiv.style.fontSize = '13px';
                 infoDiv.style.lineHeight = '1.8';
                 infoDiv.style.textAlign = 'right';
-                infoDiv.innerHTML = `
+                             infoDiv.innerHTML = `
+                    <div><strong>بازه تحلیل:</strong> ${lastAnalysis.monthlyPrecip.yearRange} (${lastAnalysis.monthlyPrecip.yearsCount} سال)</div>
                     <div><strong>بارش سالانه:</strong> ${lastAnalysis.monthlyPrecip.annualAvg.toFixed(0)} میلی‌متر</div>
                     <div><strong>پرباران‌ترین ماه:</strong> ${lastAnalysis.monthlyPrecip.maxMonth.name} با ${lastAnalysis.monthlyPrecip.maxMonth.value.toFixed(1)} میلی‌متر</div>
                     <div><strong>شاخص تمرکز بارش (PCI):</strong> ${lastAnalysis.monthlyPrecip.pci.toFixed(1)} - ${pciLabel.text}</div>
