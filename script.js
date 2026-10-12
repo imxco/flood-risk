@@ -715,18 +715,15 @@ function drawRainChart(monthlyData) {
     }
 
     const pciLabel = getPCILabel(monthlyData.pci);
-    const infoHtml = `
-        <div><strong>بازه تحلیل:</strong> ${monthlyData.yearRange} (${monthlyData.yearsCount} سال)</div>
-        <div><strong>بارش سالانه (میانگین ${monthlyData.yearsCount} سال):</strong> ${monthlyData.annualAvg.toFixed(0)} میلی‌متر</div>
-        <div><strong>پرباران‌ترین ماه:</strong> ${monthlyData.maxMonth.name} با ${monthlyData.maxMonth.value.toFixed(1)} میلی‌متر</div>
-        <div><strong>تعداد ماه‌های پرباران:</strong> ${monthlyData.rainyMonthsCount} ماه</div>
-        <div><strong>شاخص تمرکز بارش (PCI):</strong> ${monthlyData.pci.toFixed(1)}
-            <span class="pci-badge ${pciLabel.class}">${pciLabel.text}</span>
-        </div>
-        <div style="font-size: 12px; color: #718096; margin-top: 8px;">
-            PCI پایین‌تر = بارش پخش‌شده در سال (ریسک سیل کمتر) | PCI بالاتر = بارش متمرکز (ریسک سیل بیشتر)
-        </div>
-    `;
+        const infoHtml = 
+        '<div><strong>بازه تحلیل:</strong> ' + monthlyData.yearRange + ' (' + monthlyData.yearsCount + ' سال)</div>' +
+        '<div><strong>بارش سالانه (میانگین ' + monthlyData.yearsCount + ' سال):</strong> ' + monthlyData.annualAvg.toFixed(0) + ' میلی‌متر</div>' +
+        '<div><strong>پرباران‌ترین ماه:</strong> ' + monthlyData.maxMonth.name + ' با ' + monthlyData.maxMonth.value.toFixed(1) + ' میلی‌متر</div>' +
+        '<div><strong>تعداد ماه‌های پرباران:</strong> ' + monthlyData.rainyMonthsCount + ' ماه</div>' +
+        '<div><strong>شاخص تمرکز بارش (PCI):</strong> ' + monthlyData.pci.toFixed(1) + 
+            ' <span class="pci-badge ' + pciLabel.class + '">' + pciLabel.text + '</span>' +
+        '</div>' +
+        '<div style="font-size: 12px; color: #718096; margin-top: 8px;">PCI پایین‌تر = بارش پخش‌شده در سال (ریسک سیل کمتر) | PCI بالاتر = بارش متمرکز (ریسک سیل بیشتر)</div>';
     document.getElementById('chartInfo').innerHTML = infoHtml;
 
     chartSection.style.display = 'block';
