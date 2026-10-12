@@ -36,7 +36,7 @@ function initMap() {
         document.getElementById('lon').value = lon;
 
         updateMarker(parseFloat(lat), parseFloat(lon));
-        console.log(`موقعیت انتخاب شد: ${lat}, ${lon}`);
+        console.log('موقعیت انتخاب شد: ' + lat + ', ' + lon);
     });
 }
 
@@ -293,6 +293,135 @@ async function estimateSlope(lat, lon) {
 }
 
 // ============================================================
+// فاصله از نزدیک‌ترین رودخانه (OpenStreetMap Overpass API)
+// ============================================================
+async function getRiverDistance(lat, lon) {
+    // شعاع جستجو: ۱۰ کیلومتر
+    const radius = 10000;
+
+    // کوئری Overpass برای دریافت آبراهه‌ها
+    // شامل river (رودخانه)، stream (نهر)، canal (کانال)، drain (زهکش)
+    const query = '[out:json][timeout:25];' +
+        '(' +
+            'way["waterway"~"river|stream|canal|drain"](around:' + radius + ',' + lat + ',' + lon + ');' +
+        ');' +
+        'out geom;';
+
+    const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+
+    console.log('River Distance Request URL:', url);
+
+    try {
+        const res = await fetch(url);
+        if (!res.ok) {
+            console.warn('Overpass API error:', res.status);
+            return null;
+        }
+
+        const data = await res.json();
+
+        if (!data.elements || data.elements.length === 0) {
+            console.warn('هیچ آبراهه‌ای در شعاع ۱۰ کیلومتری یافت نشد');
+            return {
+                distance: null,
+                distanceText: 'بیش از ۱۰ کیلومتر',
+                name: null,
+                type: null,
+                found: false
+            };
+        }
+
+        console.log('تعداد آبراهه‌های یافت‌شده:', data.elements.length);
+
+        // محاسبه فاصله تا نزدیک‌ترین نقطه از هر آبراهه
+        let minDistance = Infinity;
+        let nearestWaterway = null;
+        let nearestPoint = null;
+
+        data.elements.forEach(element => {
+            if (!element.geometry || !Array.isArray(element.geometry)) return;
+
+            element.geometry.forEach(point => {
+                const dist = haversineDistance(lat, lon, point.lat, point.lon);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    nearestWaterway = element;
+                    nearestPoint = point;
+                }
+            });
+        });
+
+        if (nearestWaterway === null) {
+            return null;
+        }
+
+        // استخراج نام و نوع
+        const tags = nearestWaterway.tags || {};
+        const name = tags.name || tags['name:fa'] || tags['name:en'] || 'بدون نام';
+        const type = tags.waterway || 'نامشخص';
+
+        // تبدیل نوع به فارسی
+        const typeMap = {
+            'river': 'رودخانه',
+            'stream': 'نهر',
+            'canal': 'کانال',
+            'drain': 'زهکش'
+        };
+        const typeFa = typeMap[type] || type;
+
+        // فرمت فاصله
+        let distanceText;
+        if (minDistance < 1000) {
+            distanceText = minDistance.toFixed(0) + ' متر';
+        } else {
+            distanceText = (minDistance / 1000).toFixed(2) + ' کیلومتر';
+        }
+
+        return {
+            distance: minDistance,          // فاصله به متر
+            distanceText: distanceText,     // متن فرمت‌شده
+            name: name,                     // نام رودخانه
+            type: typeFa,                   // نوع (رودخانه/نهر/کانال)
+            found: true
+        };
+
+    } catch (e) {
+        console.warn('River Distance error:', e);
+        return null;
+    }
+}
+
+// ============================================================
+// محاسبه فاصله هاورساین (بین دو نقطه جغرافیایی)
+// ============================================================
+function haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // شعاع زمین به متر
+    const toRad = deg => deg * Math.PI / 180;
+
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+// ============================================================
+// نمره‌دهی فاصله از رودخانه
+// ============================================================
+function getRiverScore(distance) {
+    if (distance === null || distance === undefined) return 1; // اگر پیدا نشد، ریسک کم
+    if (distance < 100) return 10;
+    if (distance < 200) return 8;
+    if (distance < 300) return 6;
+    if (distance < 500) return 4;
+    return 2;
+}
+
+// ============================================================
 // دریافت NDVI از ORNL DAAC
 // ============================================================
 async function getNDVI(lat, lon, token) {
@@ -515,7 +644,7 @@ function getPCILabel(pci) {
 // ============================================================
 // محاسبه ریسک
 // ============================================================
-function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviData, landCoverData) {
+function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviData, landCoverData, riverData) {
     const factors = [];
     let totalScore = 0;
     let weightSum = 0;
@@ -629,6 +758,36 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         weightSum += 4;
     }
 
+    // ۸. فاصله از رودخانه (جدید)
+    if (riverData && riverData.found) {
+        const score = getRiverScore(riverData.distance);
+        let riverValue = riverData.distanceText;
+        if (riverData.type && riverData.name && riverData.name !== 'بدون نام') {
+            riverValue += ' تا ' + riverData.type + ' ' + riverData.name;
+        } else if (riverData.type) {
+            riverValue += ' تا ' + riverData.type;
+        }
+
+        factors.push({
+            name: 'فاصله از نزدیک‌ترین آبراهه',
+            value: riverValue,
+            score: score,
+            weight: 3
+        });
+        totalScore += score * 3;
+        weightSum += 3;
+    } else if (riverData && !riverData.found) {
+        // اگر آبراهه‌ای پیدا نشد، ریسک کم
+        factors.push({
+            name: 'فاصله از نزدیک‌ترین آبراهه',
+            value: 'بیش از ۱۰ کیلومتر (بدون آبراهه)',
+            score: 1,
+            weight: 3
+        });
+        totalScore += 1 * 3;
+        weightSum += 3;
+    }
+
     const finalScore = weightSum > 0 ? totalScore / weightSum : 0;
     return { factors: factors, finalScore: finalScore };
 }
@@ -693,386 +852,4 @@ function drawRainChart(monthlyData) {
                         text: 'بارش (میلی‌متر)',
                         font: { family: 'Tahoma', size: 12 }
                     },
-                    ticks: { font: { family: 'Tahoma' } }
-                },
-                x: {
-                    title: {
-                        display: true,
-                        text: 'ماه',
-                        font: { family: 'Tahoma', size: 12 }
-                    },
-                    ticks: { font: { family: 'Tahoma', size: 11 } }
-                }
-            }
-        }
-    });
-
-    const chartTitle = document.getElementById('chartTitle');
-    if (chartTitle && monthlyData.yearRange) {
-        chartTitle.textContent = '📊 میانگین بارش ماهانه (' + monthlyData.yearRange + ')';
-    }
-
-    const pciLabel = getPCILabel(monthlyData.pci);
-    const infoHtml =
-        '<div><strong>بازه تحلیل:</strong> ' + monthlyData.yearRange + ' (' + monthlyData.yearsCount + ' سال)</div>' +
-        '<div><strong>بارش سالانه (میانگین ' + monthlyData.yearsCount + ' سال):</strong> ' + monthlyData.annualAvg.toFixed(0) + ' میلی‌متر</div>' +
-        '<div><strong>پرباران‌ترین ماه:</strong> ' + monthlyData.maxMonth.name + ' با ' + monthlyData.maxMonth.value.toFixed(1) + ' میلی‌متر</div>' +
-        '<div><strong>تعداد ماه‌های پرباران:</strong> ' + monthlyData.rainyMonthsCount + ' ماه</div>' +
-        '<div><strong>شاخص تمرکز بارش (PCI):</strong> ' + monthlyData.pci.toFixed(1) +
-            ' <span class="pci-badge ' + pciLabel.class + '">' + pciLabel.text + '</span>' +
-        '</div>' +
-        '<div style="font-size: 12px; color: #718096; margin-top: 8px;">PCI پایین‌تر = بارش پخش‌شده (ریسک کمتر) | PCI بالاتر = بارش متمرکز (ریسک بیشتر)</div>';
-
-    document.getElementById('chartInfo').innerHTML = infoHtml;
-    chartSection.style.display = 'block';
-}
-
-// ============================================================
-// تابع اصلی تحلیل
-// ============================================================
-async function analyzeFloodRisk() {
-    hideError();
-    const resultEl = document.getElementById('result');
-    const loadingEl = document.getElementById('loading');
-    const btn = document.getElementById('analyzeBtn');
-    const chartSection = document.getElementById('chartSection');
-
-    resultEl.classList.remove('show', 'very-low', 'low', 'medium', 'high', 'very-high');
-    chartSection.style.display = 'none';
-
-    const lat = parseFloat(document.getElementById('lat').value);
-    const lon = parseFloat(document.getElementById('lon').value);
-
-    if (isNaN(lat) || isNaN(lon)) {
-        showError('لطفاً مختصات معتبر وارد کنید');
-        return;
-    }
-
-    btn.disabled = true;
-    loadingEl.style.display = 'block';
-
-    const token = getToken();
-
-    try {
-        const results = await Promise.all([
-            getElevation(lat, lon),
-            estimateSlope(lat, lon),
-            getPrecipitation(lat, lon),
-            getMonthlyPrecipitation(lat, lon),
-            getNDVI(lat, lon, token),
-            getLandCover(lat, lon, token)
-        ]);
-
-        const elevation = results[0];
-        const slopeData = results[1];
-        const precipData = results[2];
-        const monthlyPrecip = results[3];
-        const ndviData = results[4];
-        const landCoverData = results[5];
-
-        loadingEl.style.display = 'none';
-
-        if (elevation === null && !slopeData && !monthlyPrecip) {
-            showError('متأسفانه نتوانستیم داده‌ای برای این موقعیت دریافت کنیم.');
-            btn.disabled = false;
-            return;
-        }
-
-        const slopePercent = slopeData ? slopeData.slopePercent : null;
-        const risk = calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviData, landCoverData);
-        const factors = risk.factors;
-        const finalScore = risk.finalScore;
-
-        let riskLevel, riskClass, riskAdvice;
-        if (finalScore >= 8) {
-            riskLevel = '🔴 ریسک خیلی زیاد';
-            riskClass = 'very-high';
-            riskAdvice = 'این منطقه در معرض خطر جدی سیل قرار دارد. اقدامات فوری پیشگیری و آماده‌سازی لازم است.';
-        } else if (finalScore >= 6) {
-            riskLevel = '🟠 ریسک زیاد';
-            riskClass = 'high';
-            riskAdvice = 'خطر سیل قابل توجه است. برنامه‌های آمادگی و کاهش خطر توصیه می‌شود.';
-        } else if (finalScore >= 4) {
-            riskLevel = '🟡 ریسک متوسط';
-            riskClass = 'medium';
-            riskAdvice = 'ریسک سیل در حد متوسط است. پایش و اقدامات احتیاطی توصیه می‌شود.';
-        } else if (finalScore >= 2) {
-            riskLevel = '🟢 ریسک کم';
-            riskClass = 'low';
-            riskAdvice = 'ریسک سیل پایین است. اما همچنان هوشیاری در فصل بارش توصیه می‌شود.';
-        } else {
-            riskLevel = '🟢 ریسک خیلی کم';
-            riskClass = 'very-low';
-            riskAdvice = 'ریسک سیل در این منطقه بسیار پایین است.';
-        }
-
-        document.getElementById('riskLevel').textContent = riskLevel;
-        document.getElementById('riskScore').innerHTML =
-            '<strong>نمره ریسک: ' + finalScore.toFixed(2) + ' از ۱۰</strong>' +
-            '<p style="margin-top: 10px; font-size: 14px; color: #4a5568; line-height: 1.6;">' + riskAdvice + '</p>';
-
-        let detailsHtml = '<h3 style="margin: 15px 0 10px;">📊 جزئیات پارامترها:</h3>';
-        factors.forEach(f => {
-            detailsHtml += '<div class="param-row">' +
-                '<span>' + f.name + '</span>' +
-                '<span>' + f.value + ' (نمره: ' + f.score + '/10، وزن: ' + f.weight + ')</span>' +
-            '</div>';
-        });
-
-        if (!ndviData) {
-            detailsHtml += '<p style="color: #d69e2e; margin-top: 10px;">⚠️ داده NDVI دریافت نشد. ' +
-                (token ? 'ممکن است توکن نامعتبر باشد.' : 'برای دریافت، توکن NASA را وارد کنید.') + '</p>';
-        }
-
-        if (!landCoverData) {
-            detailsHtml += '<p style="color: #d69e2e; margin-top: 10px;">⚠️ داده کاربری اراضی دریافت نشد. ' +
-                (token ? 'ممکن است محصول MCD12Q1 موجود نباشد.' : 'برای دریافت، توکن NASA را وارد کنید.') + '</p>';
-        }
-
-        document.getElementById('details').innerHTML = detailsHtml;
-
-        if (monthlyPrecip && monthlyPrecip.monthlyAvg) {
-            drawRainChart(monthlyPrecip);
-        }
-
-        lastAnalysis = {
-            lat: lat,
-            lon: lon,
-            finalScore: finalScore,
-            riskLevel: riskLevel,
-            riskAdvice: riskAdvice,
-            factors: factors,
-            monthlyPrecip: monthlyPrecip
-        };
-
-        resultEl.classList.add('show', riskClass);
-
-        if (map) {
-            map.setView([lat, lon], 12);
-            updateMarker(lat, lon);
-        }
-
-    } catch (e) {
-        console.error(e);
-        showError('خطا در تحلیل: ' + e.message);
-    } finally {
-        loadingEl.style.display = 'none';
-        btn.disabled = false;
-    }
-}
-
-// ============================================================
-// تولید و دانلود PDF
-// ============================================================
-async function downloadPDF() {
-    if (!lastAnalysis) {
-        alert('ابتدا یک تحلیل انجام دهید');
-        return;
-    }
-
-    const btn = document.getElementById('pdfBtn');
-    btn.disabled = true;
-    btn.textContent = '⏳ در حال تولید PDF...';
-
-    try {
-        const now = new Date();
-        document.getElementById('pdfDate').textContent =
-            now.toLocaleDateString('fa-IR') + ' - ' + now.toLocaleTimeString('fa-IR');
-        document.getElementById('pdfLat').textContent = lastAnalysis.lat.toFixed(4);
-        document.getElementById('pdfLon').textContent = lastAnalysis.lon.toFixed(4);
-
-        let riskText, riskColor;
-        if (lastAnalysis.finalScore >= 8) {
-            riskText = '🔴 ریسک خیلی زیاد';
-            riskColor = '#e53e3e';
-        } else if (lastAnalysis.finalScore >= 6) {
-            riskText = '🟠 ریسک زیاد';
-            riskColor = '#dd6b20';
-        } else if (lastAnalysis.finalScore >= 4) {
-            riskText = '🟡 ریسک متوسط';
-            riskColor = '#d69e2e';
-        } else if (lastAnalysis.finalScore >= 2) {
-            riskText = '🟢 ریسک کم';
-            riskColor = '#38a169';
-        } else {
-            riskText = '🟢 ریسک خیلی کم';
-            riskColor = '#22543d';
-        }
-
-        document.getElementById('pdfRiskLevel').textContent = riskText;
-        document.getElementById('pdfScore').textContent = 'نمره ریسک: ' + lastAnalysis.finalScore.toFixed(2) + ' از ۱۰';
-        document.getElementById('pdfScoreBox').style.background = riskColor;
-        document.getElementById('pdfAdvice').textContent = lastAnalysis.riskAdvice;
-
-        // جدول پارامترها
-        const tbody = document.getElementById('pdfParamsBody');
-        tbody.innerHTML = '';
-        lastAnalysis.factors.forEach((f, i) => {
-            const row = document.createElement('tr');
-            row.style.background = i % 2 === 0 ? '#f7fafc' : 'white';
-            row.innerHTML =
-                '<td style="padding: 6px; border: 1px solid #cbd5e0;">' + f.name + '</td>' +
-                '<td style="padding: 6px; border: 1px solid #cbd5e0;">' + f.value + '</td>' +
-                '<td style="padding: 6px; border: 1px solid #cbd5e0; text-align: center;">' + f.score + '/10</td>' +
-                '<td style="padding: 6px; border: 1px solid #cbd5e0; text-align: center;">' + f.weight + '</td>';
-            tbody.appendChild(row);
-        });
-
-        // کپی نقشه
-        const mapContainer = document.getElementById('pdfMapContainer');
-        const mapElement = document.getElementById('map');
-
-        try {
-                   const mapCanvas = await html2canvas(mapElement, {
-                useCORS: true,
-                allowTaint: true,
-                scale: 4,
-                backgroundColor: '#ffffff',
-                logging: false,
-                imageTimeout: 0
-            });
-            const mapImg = document.createElement('img');
-            mapImg.src = mapCanvas.toDataURL('image/png');
-            mapImg.style.width = '100%';
-            mapImg.style.height = '100%';
-            mapImg.style.objectFit = 'cover';
-            mapContainer.innerHTML = '';
-            mapContainer.appendChild(mapImg);
-        } catch (mapErr) {
-            console.warn('خطا در عکس‌برداری از نقشه:', mapErr);
-            mapContainer.innerHTML = '<p style="padding: 20px; text-align: center; color: #718096;">نقشه در دسترس نیست</p>';
-        }
-
-        // کپی نمودار
-        const pdfChartContainer = document.getElementById('pdfChartContainer');
-        const pdfChartImage = document.getElementById('pdfChartImage');
-
-        if (rainChart && lastAnalysis.monthlyPrecip) {
-            try {
-                const chartCanvas = document.getElementById('rainChart');
-                const chartImg = document.createElement('img');
-                chartImg.src = chartCanvas.toDataURL('image/png');
-                chartImg.style.width = '100%';
-                chartImg.style.maxWidth = '380px';
-                chartImg.style.margin = '0 auto';
-                chartImg.style.display = 'block';
-                pdfChartImage.innerHTML = '';
-                pdfChartImage.appendChild(chartImg);
-
-                const pciLabel = getPCILabel(lastAnalysis.monthlyPrecip.pci);
-                const mp = lastAnalysis.monthlyPrecip;
-                const infoDiv = document.createElement('div');
-                infoDiv.style.marginTop = '10px';
-                infoDiv.style.fontSize = '12px';
-                infoDiv.style.lineHeight = '1.8';
-                infoDiv.style.textAlign = 'right';
-                infoDiv.innerHTML =
-                    '<div><strong>بازه تحلیل:</strong> ' + mp.yearRange + ' (' + mp.yearsCount + ' سال)</div>' +
-                    '<div><strong>بارش سالانه:</strong> ' + mp.annualAvg.toFixed(0) + ' میلی‌متر</div>' +
-                    '<div><strong>پرباران‌ترین ماه:</strong> ' + mp.maxMonth.name + ' با ' + mp.maxMonth.value.toFixed(1) + ' میلی‌متر</div>' +
-                    '<div><strong>شاخص تمرکز بارش (PCI):</strong> ' + mp.pci.toFixed(1) + ' - ' + pciLabel.text + '</div>';
-                pdfChartImage.appendChild(infoDiv);
-
-                pdfChartContainer.style.display = 'block';
-            } catch (chartErr) {
-                console.warn('خطا در کپی نمودار:', chartErr);
-                pdfChartContainer.style.display = 'none';
-            }
-        } else {
-            pdfChartContainer.style.display = 'none';
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        const template = document.getElementById('pdfTemplate');
-               const canvas = await html2canvas(template, {
-            useCORS: true,
-            allowTaint: true,
-            scale: 4,
-            backgroundColor: '#ffffff',
-            logging: false,
-            windowWidth: 800,
-            imageTimeout: 0,
-            removeContainer: true
-        });
-
-        const jsPDF = window.jspdf.jsPDF;
-        const doc = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4'
-        });
-
-        const pageWidth = 210;
-        const pageHeight = 297;
-        const margin = 8;
-        const contentWidth = pageWidth - 2 * margin;
-        const maxPageHeight = pageHeight - 2 * margin;
-
-        const imgWidth = contentWidth;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-        if (imgHeight <= maxPageHeight) {
-            // در یک صفحه جا می‌شود
-            const imgData = canvas.toDataURL('image/jpeg', 1.0);
-            doc.addImage(imgData, 'JPEG', margin, margin, imgWidth, imgHeight);
-        } else {
-            // چند صفحه - مدیریت هوشمند
-            const totalPages = Math.ceil(imgHeight / maxPageHeight);
-            const lastPageUsed = imgHeight - (totalPages - 1) * maxPageHeight;
-            const lastPageRatio = lastPageUsed / maxPageHeight;
-
-            let actualPages = totalPages;
-            let pageSliceHeight = maxPageHeight;
-
-            // اگر صفحه آخر کمتر از ۳۰٪ پر است، همه را در صفحه‌های کمتر جا می‌دهیم
-            if (lastPageRatio < 0.3 && totalPages > 1) {
-                actualPages = totalPages - 1;
-                pageSliceHeight = imgHeight / actualPages;
-            }
-
-            for (let page = 0; page < actualPages; page++) {
-                if (page > 0) doc.addPage();
-
-                const srcY = (page / actualPages) * canvas.height;
-                const srcHeight = canvas.height / actualPages;
-
-                const pageCanvas = document.createElement('canvas');
-                pageCanvas.width = canvas.width;
-                pageCanvas.height = srcHeight;
-
-                const ctx = pageCanvas.getContext('2d');
-                ctx.drawImage(
-                    canvas,
-                    0, srcY, canvas.width, srcHeight,
-                    0, 0, canvas.width, srcHeight
-                );
-
-                const pageData = pageCanvas.toDataURL('image/jpeg', 1.0);
-                const displayHeight = (srcHeight * imgWidth) / canvas.width;
-                doc.addImage(pageData, 'JPEG', margin, margin, imgWidth, Math.min(displayHeight, maxPageHeight));
-            }
-        }
-
-        const fileName = 'flood-risk-' + lastAnalysis.lat.toFixed(4) + '-' + lastAnalysis.lon.toFixed(4) + '-' + Date.now() + '.pdf';
-        doc.save(fileName);
-
-        console.log('✅ PDF فارسی با موفقیت تولید شد:', fileName);
-
-    } catch (e) {
-        console.error('خطا در تولید PDF:', e);
-        alert('خطا در تولید PDF: ' + e.message);
-    } finally {
-        btn.disabled = false;
-        btn.textContent = '📄 دانلود گزارش PDF';
-    }
-}
-
-// ============================================================
-// راه‌اندازی اولیه
-// ============================================================
-window.addEventListener('DOMContentLoaded', function() {
-    loadToken();
-    initMap();
-    console.log('برنامه با موفقیت راه‌اندازی شد 🚀');
-});
+                    ticks:
