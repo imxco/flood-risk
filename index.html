@@ -46,6 +46,16 @@
             <h2 id="riskLevel"></h2>
             <div id="riskScore"></div>
             <div id="details"></div>
+            
+            <!-- نمودار بارش ماهانه -->
+            <div class="chart-section" id="chartSection" style="display:none;">
+                <h3>📊 میانگین بارش ماهانه (۱۰ سال اخیر)</h3>
+                <div class="chart-container">
+                    <canvas id="rainChart"></canvas>
+                </div>
+                <div class="chart-info" id="chartInfo"></div>
+            </div>
+            
             <button id="pdfBtn" onclick="downloadPDF()" class="btn-pdf">📄 دانلود گزارش PDF</button>
             <p class="note">⚠️ این تحلیل بر اساس داده‌های جهانی و مدل‌های ساده‌شده انجام شده و جایگزین مطالعات دقیق هیدرولوژیکی نیست.</p>
         </div>
@@ -95,6 +105,11 @@
             </table>
         </div>
 
+        <div id="pdfChartContainer" style="margin-bottom: 20px; display: none;">
+            <h2 style="font-size: 16px; color: #2d3748; margin-bottom: 10px;">📊 میانگین بارش ماهانه (۱۰ سال اخیر)</h2>
+            <div id="pdfChartImage" style="text-align: center;"></div>
+        </div>
+
         <div style="background: #fefcbf; padding: 15px; border-radius: 8px; border-right: 4px solid #d69e2e; margin-bottom: 20px;">
             <h2 style="margin: 0 0 8px 0; font-size: 15px; color: #744210;">💡 توصیه</h2>
             <p id="pdfAdvice" style="margin: 0; font-size: 13px; color: #4a5568; line-height: 1.6;"></p>
@@ -108,6 +123,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
             crossorigin=""></script>
