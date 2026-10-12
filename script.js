@@ -319,7 +319,7 @@ async function getRiverDistance(lat, lon) {
         ');' +
         'out geom;';
 
-    const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+        const url = 'https://overpass.kumi.systems/api/interpreter?data=' + encodeURIComponent(query);
 
     try {
         const res = await fetch(url);
@@ -1009,12 +1009,11 @@ async function generateHeatMap() {
         ? lastAnalysis.riverData.distance 
         : null;
 
-    // شبکه ۵×۵ در ناحیه ۵ کیلومتر × ۵ کیلومتر
-    // ۵ کیلومتر / ۴ فاصله = ۱.۲۵ کیلومتر بین نقاط
+    // شبکه ۵×۵ در ناحیه ۵ کیلومتر
     const gridSize = 5;
     const areaKm = 5;
     const stepKm = areaKm / (gridSize - 1);
-    const stepLat = stepKm / 111; // تبدیل کیلومتر به درجه عرض
+    const stepLat = stepKm / 111;
     const stepLon = stepKm / (111 * Math.cos(centerLat * Math.PI / 180));
 
     const points = [];
@@ -1032,7 +1031,6 @@ async function generateHeatMap() {
     }
 
     try {
-        // دریافت ارتفاع همه نقاط با یک درخواست Batch
         const elevations = await getElevationBatch(points);
 
         if (!elevations || elevations.length !== points.length) {
@@ -1044,11 +1042,9 @@ async function generateHeatMap() {
 
         status.textContent = 'در حال محاسبه نمره‌ها...';
 
-        // محاسبه نمره هر نقطه
         const heatPoints = points.map((p, idx) => {
             const elev = elevations[idx];
 
-            // نمره ارتفاع
             let elevScore;
             if (elev < 200) elevScore = 10;
             else if (elev < 500) elevScore = 8;
@@ -1057,12 +1053,10 @@ async function generateHeatMap() {
             else if (elev < 2000) elevScore = 2;
             else elevScore = 1;
 
-            // محاسبه شیب محلی از همسایه‌ها
-            let slopeScore = 5; // پیش‌فرض
+            let slopeScore = 5;
             const i = p.gridI;
             const j = p.gridJ;
 
-            // همسایه‌های اطراف
             const neighbors = [];
             if (i > 0) neighbors.push(elevations[(i - 1) * gridSize + j]);
             if (i < gridSize - 1) neighbors.push(elevations[(i + 1) * gridSize + j]);
@@ -1071,7 +1065,6 @@ async function generateHeatMap() {
 
             if (neighbors.length > 0) {
                 const maxDiff = Math.max(...neighbors.map(n => Math.abs(n - elev)));
-                // اختلاف ارتفاع به متر، فاصله ~۱۲۵۰ متر
                 const slopePercent = (maxDiff / 1250) * 100;
 
                 if (slopePercent < 0.5) slopeScore = 10;
@@ -1082,13 +1075,11 @@ async function generateHeatMap() {
                 else slopeScore = 1;
             }
 
-            // نمره فاصله از رودخانه (برای همه یکسان، از نقطه مرکزی)
             let riverScore = 1;
             if (riverDistance !== null) {
                 riverScore = getRiverScore(riverDistance);
             }
 
-            // نمره نهایی: میانگین وزنی (ارتفاع ۳، شیب ۳، رودخانه ۳)
             const totalScore = (elevScore * 3 + slopeScore * 3 + riverScore * 3) / 9;
 
             return {
@@ -1102,24 +1093,23 @@ async function generateHeatMap() {
             };
         });
 
-        // رنگ‌بندی نقاط
         function getColor(score) {
-            if (score >= 8) return '#e53e3e';      // قرمز
-            if (score >= 6) return '#dd6b20';      // نارنجی
-            if (score >= 4) return '#d69e2e';      // زرد
-            return '#38a169';                       // سبز
+            if (score >= 8) return '#e53e3e';
+            if (score >= 6) return '#dd6b20';
+            if (score >= 4) return '#d69e2e';
+            return '#38a169';
         }
 
-        // ایجاد لایه گروهی
         heatmapLayer = L.layerGroup();
 
         heatPoints.forEach(p => {
             const color = getColor(p.finalScore);
-            const circle = L.circle([p.lat, p.lon], {
-                radius: 600,
+            // دایره کوچک به جای دایره بزرگ
+            const circle = L.circleMarker([p.lat, p.lon], {
+                radius: 15,
                 color: color,
                 fillColor: color,
-                fillOpacity: 0.6,
+                fillOpacity: 0.8,
                 weight: 2
             });
 
@@ -1139,7 +1129,10 @@ async function generateHeatMap() {
         heatmapLayer.addTo(map);
         heatmapVisible = true;
 
-        // به‌روزرسانی وضعیت
+        // زوم خودکار روی ناحیه
+        const bounds = L.latLngBounds(heatPoints.map(p => [p.lat, p.lon]));
+        map.fitBounds(bounds, { padding: [50, 50] });
+
         const avgScore = heatPoints.reduce((a, b) => a + b.finalScore, 0) / heatPoints.length;
         const maxScore = Math.max(...heatPoints.map(p => p.finalScore));
         const minScore = Math.min(...heatPoints.map(p => p.finalScore));
@@ -1150,7 +1143,7 @@ async function generateHeatMap() {
                 '<div><strong>بیشترین نمره:</strong> ' + maxScore.toFixed(2) + '</div>' +
                 '<div><strong>کمترین نمره:</strong> ' + minScore.toFixed(2) + '</div>' +
                 '<div style="font-size: 12px; color: #718096; margin-top: 8px;">' +
-                    'برای جزئیات هر نقطه، روی دایره‌ها کلیک کنید.' +
+                    'برای جزئیات هر نقطه، روی نقاط رنگی کلیک کنید.' +
                 '</div>' +
             '</div>';
 
