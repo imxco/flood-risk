@@ -293,104 +293,138 @@ async function estimateSlope(lat, lon) {
 }
 
 // ============================================================
-// فاصله از نزدیک‌ترین رودخانه (OpenStreetMap Overpass API)
+// فاصله از نزدیک‌ترین رودخانه (با چند سرور جایگزین)
 // ============================================================
 async function getRiverDistance(lat, lon) {
-    // شعاع جستجو: ۱۰ کیلومتر
     const radius = 10000;
 
-    // کوئری Overpass برای دریافت آبراهه‌ها
-    // شامل river (رودخانه)، stream (نهر)، canal (کانال)، drain (زهکش)
     const query = '[out:json][timeout:25];' +
         '(' +
             'way["waterway"~"river|stream|canal|drain"](around:' + radius + ',' + lat + ',' + lon + ');' +
         ');' +
         'out geom;';
 
-    const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+    // لیست سرورهای جایگزین (به ترتیب اولویت)
+    const servers = [
+        'https://overpass.private.coffee/api/interpreter',
+        'https://overpass-api.de/api/interpreter',
+        'https://overpass.kumi.systems/api/interpreter',
+        'https://overpass.osm.ch/api/interpreter',
+        'https://overpass.openstreetmap.ru/api/interpreter'
+    ];
 
-    console.log('River Distance Request URL:', url);
+    // هدرهای لازم برای جلوگیری از خطای 406
+    const headers = {
+        'Accept': 'application/json',
+        'User-Agent': 'FloodRiskApp/1.0 (Educational Project)',
+        'Referer': window.location.href
+    };
 
-    try {
-        const res = await fetch(url);
-        if (!res.ok) {
-            console.warn('Overpass API error:', res.status);
-            return null;
-        }
+    // امتحان هر سرور به ترتیب
+    for (let i = 0; i < servers.length; i++) {
+        const serverUrl = servers[i];
+        const url = serverUrl + '?data=' + encodeURIComponent(query);
 
-        const data = await res.json();
+        console.log('تلاش ' + (i + 1) + ' از ' + servers.length + ': ' + serverUrl);
 
-        if (!data.elements || data.elements.length === 0) {
-            console.warn('هیچ آبراهه‌ای در شعاع ۱۰ کیلومتری یافت نشد');
-            return {
-                distance: null,
-                distanceText: 'بیش از ۱۰ کیلومتر',
-                name: null,
-                type: null,
-                found: false
-            };
-        }
+        try {
+            // Timeout 15 ثانیه برای هر سرور
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-        console.log('تعداد آبراهه‌های یافت‌شده:', data.elements.length);
-
-        // محاسبه فاصله تا نزدیک‌ترین نقطه از هر آبراهه
-        let minDistance = Infinity;
-        let nearestWaterway = null;
-        let nearestPoint = null;
-
-        data.elements.forEach(element => {
-            if (!element.geometry || !Array.isArray(element.geometry)) return;
-
-            element.geometry.forEach(point => {
-                const dist = haversineDistance(lat, lon, point.lat, point.lon);
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    nearestWaterway = element;
-                    nearestPoint = point;
-                }
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: headers,
+                signal: controller.signal
             });
-        });
 
-        if (nearestWaterway === null) {
-            return null;
+            clearTimeout(timeoutId);
+
+            if (!res.ok) {
+                console.warn('سرور ' + serverUrl + ' خطا داد: ' + res.status);
+                continue; // سرور بعدی
+            }
+
+            const data = await res.json();
+
+            if (!data.elements || data.elements.length === 0) {
+                console.log('سرور ' + serverUrl + ': هیچ آبراهه‌ای یافت نشد');
+                return {
+                    distance: null,
+                    distanceText: 'بیش از ۱۰ کیلومتر',
+                    name: null,
+                    type: null,
+                    found: false
+                };
+            }
+
+            console.log('✅ سرور ' + serverUrl + ': ' + data.elements.length + ' آبراهه یافت شد');
+
+            // محاسبه فاصله تا نزدیک‌ترین نقطه
+            let minDistance = Infinity;
+            let nearestWaterway = null;
+
+            data.elements.forEach(element => {
+                if (!element.geometry || !Array.isArray(element.geometry)) return;
+
+                element.geometry.forEach(point => {
+                    const dist = haversineDistance(lat, lon, point.lat, point.lon);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        nearestWaterway = element;
+                    }
+                });
+            });
+
+            if (nearestWaterway === null) {
+                return {
+                    distance: null,
+                    distanceText: 'بیش از ۱۰ کیلومتر',
+                    name: null,
+                    type: null,
+                    found: false
+                };
+            }
+
+            const tags = nearestWaterway.tags || {};
+            const name = tags.name || tags['name:fa'] || tags['name:en'] || 'بدون نام';
+            const type = tags.waterway || 'نامشخص';
+
+            const typeMap = {
+                'river': 'رودخانه',
+                'stream': 'نهر',
+                'canal': 'کانال',
+                'drain': 'زهکش'
+            };
+            const typeFa = typeMap[type] || type;
+
+            let distanceText;
+            if (minDistance < 1000) {
+                distanceText = minDistance.toFixed(0) + ' متر';
+            } else {
+                distanceText = (minDistance / 1000).toFixed(2) + ' کیلومتر';
+            }
+
+            return {
+                distance: minDistance,
+                distanceText: distanceText,
+                name: name,
+                type: typeFa,
+                found: true,
+                server: serverUrl
+            };
+
+        } catch (e) {
+            // خطا (Timeout یا Abort)
+            console.warn('سرور ' + serverUrl + ' خطا داد:', e.message);
+            continue; // سرور بعدی
         }
-
-        // استخراج نام و نوع
-        const tags = nearestWaterway.tags || {};
-        const name = tags.name || tags['name:fa'] || tags['name:en'] || 'بدون نام';
-        const type = tags.waterway || 'نامشخص';
-
-        // تبدیل نوع به فارسی
-        const typeMap = {
-            'river': 'رودخانه',
-            'stream': 'نهر',
-            'canal': 'کانال',
-            'drain': 'زهکش'
-        };
-        const typeFa = typeMap[type] || type;
-
-        // فرمت فاصله
-        let distanceText;
-        if (minDistance < 1000) {
-            distanceText = minDistance.toFixed(0) + ' متر';
-        } else {
-            distanceText = (minDistance / 1000).toFixed(2) + ' کیلومتر';
-        }
-
-        return {
-            distance: minDistance,          // فاصله به متر
-            distanceText: distanceText,     // متن فرمت‌شده
-            name: name,                     // نام رودخانه
-            type: typeFa,                   // نوع (رودخانه/نهر/کانال)
-            found: true
-        };
-
-    } catch (e) {
-        console.warn('River Distance error:', e);
-        return null;
     }
-}
 
+    // اگر همه سرورها خطا دادند
+    console.error('❌ همه سرورهای Overpass خطا دادند');
+    return null;
+}
 // ============================================================
 // محاسبه فاصله هاورساین (بین دو نقطه جغرافیایی)
 // ============================================================
