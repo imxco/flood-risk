@@ -7,7 +7,6 @@ let analysisCircle = null;
 let lastAnalysis = null;
 let rainChart = null;
 
-// نام ماه‌های شمسی (برای نمودار)
 const MONTH_NAMES_FA = [
     'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
     'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
@@ -167,78 +166,74 @@ async function getPrecipitation(lat, lon) {
 }
 
 // ============================================================
-// دریافت بارش ماهانه ۱۰ ساله (2014-2023)
+// دریافت بارش ماهانه ۱۰ سال اخیر (بازه پویا)
 // ============================================================
 async function getMonthlyPrecipitation(lat, lon) {
-    // محاسبه پویا بازه ۱۰ سال اخیر
     const now = new Date();
-    const endYear = now.getFullYear() - 1;  // سال قبل (چون سال جاری کامل نیست)
-    const startYear = endYear - 9;           // ۱۰ سال
-    
+    const endYear = now.getFullYear() - 1;
+    const startYear = endYear - 9;
+
     const startDate = `${startYear}-01-01`;
     const endDate = `${endYear}-12-31`;
-    
+
     console.log(`دریافت بارش از ${startDate} تا ${endDate}`);
-    
+
     const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startDate}&end_date=${endDate}&daily=precipitation_sum&timezone=auto`;
-    
+
     try {
         const res = await fetch(url);
         if (!res.ok) throw new Error('خطا در دریافت بارش تاریخی');
         const data = await res.json();
-        
+
         if (!data.daily || !data.daily.time || !data.daily.precipitation_sum) {
             return null;
         }
-        
+
         const times = data.daily.time;
         const precip = data.daily.precipitation_sum;
-        
+
         const yearlyTotals = {};
-        
+
         for (let i = 0; i < times.length; i++) {
             const date = new Date(times[i]);
             const month = date.getMonth();
             const year = date.getFullYear();
             const value = precip[i];
-            
+
             if (value === null || value === undefined) continue;
-            
+
             if (!yearlyTotals[year]) {
                 yearlyTotals[year] = Array.from({ length: 12 }, () => 0);
             }
             yearlyTotals[year][month] += value;
         }
-        
+
         const monthlyAvg = Array.from({ length: 12 }, () => []);
         const years = Object.keys(yearlyTotals);
-        
+
         for (const year of years) {
             for (let m = 0; m < 12; m++) {
                 monthlyAvg[m].push(yearlyTotals[year][m]);
             }
         }
-        
-        const monthlyAverages = monthlyAvg.map(arr => 
+
+        const monthlyAverages = monthlyAvg.map(arr =>
             arr.reduce((a, b) => a + b, 0) / arr.length
         );
-        
-        // نگاشت به تقویم شمسی
+
+        // نگاشت به تقویم شمسی (تقریبی)
         const monthOrder = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1];
         const persianMonthlyAvg = monthOrder.map(m => monthlyAverages[m]);
-        
-        // بارش سالانه
-        const annualTotals = years.map(y => 
+
+        const annualTotals = years.map(y =>
             yearlyTotals[y].reduce((a, b) => a + b, 0)
         );
         const annualAvg = annualTotals.reduce((a, b) => a + b, 0) / annualTotals.length;
-        
-        // PCI
+
         const sumMonthly = persianMonthlyAvg.reduce((a, b) => a + b, 0);
         const sumSquared = persianMonthlyAvg.reduce((a, b) => a + b * b, 0);
         const pci = sumMonthly > 0 ? (sumSquared / (sumMonthly * sumMonthly)) * 100 : 0;
-        
-        // پرباران‌ترین ماه
+
         let maxMonthIndex = 0;
         let maxMonthValue = 0;
         persianMonthlyAvg.forEach((v, i) => {
@@ -247,11 +242,10 @@ async function getMonthlyPrecipitation(lat, lon) {
                 maxMonthIndex = i;
             }
         });
-        
-        // تعداد ماه‌های پرباران
+
         const threshold = annualAvg * 0.1;
         const rainyMonthsCount = persianMonthlyAvg.filter(v => v > threshold).length;
-        
+
         return {
             monthlyAvg: persianMonthlyAvg,
             annualAvg: annualAvg,
@@ -267,7 +261,7 @@ async function getMonthlyPrecipitation(lat, lon) {
             startDate: startDate,
             endDate: endDate
         };
-        
+
     } catch (e) {
         console.warn('Monthly precipitation error:', e);
         return null;
@@ -492,11 +486,11 @@ function getLandCoverInfo(code) {
         17: { name: 'پهنه آبی', nameEn: 'Water Bodies', floodScore: 10, description: 'سطح آب، ریسک بسیار بالا' }
     };
 
-    return mapping[code] || { 
-        name: 'نامشخص', 
-        nameEn: 'Unknown', 
-        floodScore: 5, 
-        description: 'کد نامشخص' 
+    return mapping[code] || {
+        name: 'نامشخص',
+        nameEn: 'Unknown',
+        floodScore: 5,
+        description: 'کد نامشخص'
     };
 }
 
@@ -555,7 +549,7 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         weightSum += 3;
     }
 
-       // ۳. بارش سالانه (وزن ۴) - از میانگین ۱۰ ساله
+    // ۳. بارش سالانه (وزن ۴)
     if (monthlyPrecip) {
         let score;
         const annual = monthlyPrecip.annualAvg;
@@ -566,26 +560,27 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         else if (annual > 300) score = 4;
         else if (annual > 150) score = 2;
         else score = 1;
-        factors.push({ 
-            name: `بارش سالانه (میانگین ${yearsCount} سال)`, 
-            value: `${annual.toFixed(0)} میلی‌متر`, 
-            score, 
-            weight: 4 
+        factors.push({
+            name: `بارش سالانه (میانگین ${yearsCount} سال)`,
+            value: `${annual.toFixed(0)} میلی‌متر`,
+            score,
+            weight: 4
         });
         totalScore += score * 4;
         weightSum += 4;
     }
+
     // ۴. شاخص تمرکز بارش (PCI) - وزن ۳
     if (monthlyPrecip) {
         const pci = monthlyPrecip.pci;
         const pciScore = getPCIScore(pci);
         const pciLabel = getPCILabel(pci);
-        
-        factors.push({ 
-            name: 'شاخص تمرکز بارش (PCI)', 
-            value: `${pci.toFixed(1)} - ${pciLabel.text}`, 
-            score: pciScore, 
-            weight: 3 
+
+        factors.push({
+            name: 'شاخص تمرکز بارش (PCI)',
+            value: `${pci.toFixed(1)} - ${pciLabel.text}`,
+            score: pciScore,
+            weight: 3
         });
         totalScore += pciScore * 3;
         weightSum += 3;
@@ -625,11 +620,11 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
     // ۷. کاربری اراضی (وزن ۴)
     if (landCoverData) {
         const score = landCoverData.floodScore;
-        factors.push({ 
-            name: 'کاربری اراضی', 
-            value: `${landCoverData.name} (کد ${landCoverData.code})`, 
-            score, 
-            weight: 4 
+        factors.push({
+            name: 'کاربری اراضی',
+            value: `${landCoverData.name} (کد ${landCoverData.code})`,
+            score,
+            weight: 4
         });
         totalScore += score * 4;
         weightSum += 4;
@@ -645,24 +640,22 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
 function drawRainChart(monthlyData) {
     const chartSection = document.getElementById('chartSection');
     const ctx = document.getElementById('rainChart').getContext('2d');
-    
-    // حذف نمودار قبلی
+
     if (rainChart) {
         rainChart.destroy();
         rainChart = null;
     }
-    
-    // رنگ ستون‌ها بر اساس مقدار
+
     const maxVal = Math.max(...monthlyData.monthlyAvg);
     const colors = monthlyData.monthlyAvg.map(v => {
-        const ratio = v / maxVal;
-        if (ratio > 0.8) return '#c53030';   // قرمز تیره
-        if (ratio > 0.6) return '#dd6b20';   // نارنجی
-        if (ratio > 0.4) return '#d69e2e';   // زرد
-        if (ratio > 0.2) return '#38a169';   // سبز
-        return '#68d391';                    // سبز روشن
+        const ratio = maxVal > 0 ? v / maxVal : 0;
+        if (ratio > 0.8) return '#c53030';
+        if (ratio > 0.6) return '#dd6b20';
+        if (ratio > 0.4) return '#d69e2e';
+        if (ratio > 0.2) return '#38a169';
+        return '#68d391';
     });
-    
+
     rainChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -680,9 +673,7 @@ function drawRainChart(monthlyData) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    display: false
-                },
+                legend: { display: false },
                 tooltip: {
                     rtl: true,
                     textDirection: 'rtl',
@@ -703,9 +694,7 @@ function drawRainChart(monthlyData) {
                         text: 'بارش (میلی‌متر)',
                         font: { family: 'Tahoma', size: 12 }
                     },
-                    ticks: {
-                        font: { family: 'Tahoma' }
-                    }
+                    ticks: { font: { family: 'Tahoma' } }
                 },
                 x: {
                     title: {
@@ -713,27 +702,25 @@ function drawRainChart(monthlyData) {
                         text: 'ماه',
                         font: { family: 'Tahoma', size: 12 }
                     },
-                    ticks: {
-                        font: { family: 'Tahoma', size: 11 }
-                    }
+                    ticks: { font: { family: 'Tahoma', size: 11 } }
                 }
             }
         }
     });
-    
-    // نمایش اطلاعات تکمیلی
+
+    // به‌روزرسانی عنوان با بازه تاریخ
+    const chartTitle = document.getElementById('chartTitle');
+    if (chartTitle && monthlyData.yearRange) {
+        chartTitle.textContent = `📊 میانگین بارش ماهانه (${monthlyData.yearRange})`;
+    }
+
     const pciLabel = getPCILabel(monthlyData.pci);
-    const infoHtml = `
-            // به‌روزرسانی عنوان نمودار با بازه تاریخ
-    document.querySelector('.chart-section h3').textContent = 
-        `📊 میانگین بارش ماهانه (${monthlyData.yearRange})`;
-    
     const infoHtml = `
         <div><strong>بازه تحلیل:</strong> ${monthlyData.yearRange} (${monthlyData.yearsCount} سال)</div>
         <div><strong>بارش سالانه (میانگین ${monthlyData.yearsCount} سال):</strong> ${monthlyData.annualAvg.toFixed(0)} میلی‌متر</div>
         <div><strong>پرباران‌ترین ماه:</strong> ${monthlyData.maxMonth.name} با ${monthlyData.maxMonth.value.toFixed(1)} میلی‌متر</div>
         <div><strong>تعداد ماه‌های پرباران:</strong> ${monthlyData.rainyMonthsCount} ماه</div>
-        <div><strong>شاخص تمرکز بارش (PCI):</strong> ${monthlyData.pci.toFixed(1)} 
+        <div><strong>شاخص تمرکز بارش (PCI):</strong> ${monthlyData.pci.toFixed(1)}
             <span class="pci-badge ${pciLabel.class}">${pciLabel.text}</span>
         </div>
         <div style="font-size: 12px; color: #718096; margin-top: 8px;">
@@ -741,7 +728,7 @@ function drawRainChart(monthlyData) {
         </div>
     `;
     document.getElementById('chartInfo').innerHTML = infoHtml;
-    
+
     chartSection.style.display = 'block';
 }
 
@@ -818,7 +805,7 @@ async function analyzeFloodRisk() {
         }
 
         document.getElementById('riskLevel').textContent = riskLevel;
-        document.getElementById('riskScore').innerHTML = 
+        document.getElementById('riskScore').innerHTML =
             `<strong>نمره ریسک: ${finalScore.toFixed(2)} از ۱۰</strong>` +
             `<p style="margin-top: 10px; font-size: 14px; color: #4a5568; line-height: 1.6;">${riskAdvice}</p>`;
 
@@ -842,12 +829,10 @@ async function analyzeFloodRisk() {
 
         document.getElementById('details').innerHTML = detailsHtml;
 
-        // رسم نمودار بارش ماهانه
         if (monthlyPrecip && monthlyPrecip.monthlyAvg) {
             drawRainChart(monthlyPrecip);
         }
 
-        // ذخیره اطلاعات برای PDF
         lastAnalysis = {
             lat: lat,
             lon: lon,
@@ -875,7 +860,7 @@ async function analyzeFloodRisk() {
 }
 
 // ============================================================
-// تولید و دانلود PDF (روش تصویری - فارسی کامل)
+// تولید و دانلود PDF
 // ============================================================
 async function downloadPDF() {
     if (!lastAnalysis) {
@@ -888,9 +873,8 @@ async function downloadPDF() {
     btn.textContent = '⏳ در حال تولید PDF...';
 
     try {
-        // ========== ۱. پر کردن قالب HTML ==========
         const now = new Date();
-        document.getElementById('pdfDate').textContent = 
+        document.getElementById('pdfDate').textContent =
             now.toLocaleDateString('fa-IR') + ' - ' + now.toLocaleTimeString('fa-IR');
         document.getElementById('pdfLat').textContent = lastAnalysis.lat.toFixed(4);
         document.getElementById('pdfLon').textContent = lastAnalysis.lon.toFixed(4);
@@ -933,10 +917,10 @@ async function downloadPDF() {
             tbody.appendChild(row);
         });
 
-        // ========== ۲. کپی نقشه ==========
+        // کپی نقشه
         const mapContainer = document.getElementById('pdfMapContainer');
         const mapElement = document.getElementById('map');
-        
+
         try {
             const mapCanvas = await html2canvas(mapElement, {
                 useCORS: true,
@@ -956,10 +940,10 @@ async function downloadPDF() {
             mapContainer.innerHTML = '<p style="padding: 20px; text-align: center; color: #718096;">نقشه در دسترس نیست</p>';
         }
 
-        // ========== ۳. کپی نمودار ==========
+        // کپی نمودار
         const pdfChartContainer = document.getElementById('pdfChartContainer');
         const pdfChartImage = document.getElementById('pdfChartImage');
-        
+
         if (rainChart && lastAnalysis.monthlyPrecip) {
             try {
                 const chartCanvas = document.getElementById('rainChart');
@@ -969,22 +953,22 @@ async function downloadPDF() {
                 chartImg.style.maxWidth = '600px';
                 pdfChartImage.innerHTML = '';
                 pdfChartImage.appendChild(chartImg);
-                
-                // اضافه کردن اطلاعات PCI
+
                 const pciLabel = getPCILabel(lastAnalysis.monthlyPrecip.pci);
+                const mp = lastAnalysis.monthlyPrecip;
                 const infoDiv = document.createElement('div');
                 infoDiv.style.marginTop = '10px';
                 infoDiv.style.fontSize = '13px';
                 infoDiv.style.lineHeight = '1.8';
                 infoDiv.style.textAlign = 'right';
-                             infoDiv.innerHTML = `
-                    <div><strong>بازه تحلیل:</strong> ${lastAnalysis.monthlyPrecip.yearRange} (${lastAnalysis.monthlyPrecip.yearsCount} سال)</div>
-                    <div><strong>بارش سالانه:</strong> ${lastAnalysis.monthlyPrecip.annualAvg.toFixed(0)} میلی‌متر</div>
-                    <div><strong>پرباران‌ترین ماه:</strong> ${lastAnalysis.monthlyPrecip.maxMonth.name} با ${lastAnalysis.monthlyPrecip.maxMonth.value.toFixed(1)} میلی‌متر</div>
-                    <div><strong>شاخص تمرکز بارش (PCI):</strong> ${lastAnalysis.monthlyPrecip.pci.toFixed(1)} - ${pciLabel.text}</div>
+                infoDiv.innerHTML = `
+                    <div><strong>بازه تحلیل:</strong> ${mp.yearRange} (${mp.yearsCount} سال)</div>
+                    <div><strong>بارش سالانه:</strong> ${mp.annualAvg.toFixed(0)} میلی‌متر</div>
+                    <div><strong>پرباران‌ترین ماه:</strong> ${mp.maxMonth.name} با ${mp.maxMonth.value.toFixed(1)} میلی‌متر</div>
+                    <div><strong>شاخص تمرکز بارش (PCI):</strong> ${mp.pci.toFixed(1)} - ${pciLabel.text}</div>
                 `;
                 pdfChartImage.appendChild(infoDiv);
-                
+
                 pdfChartContainer.style.display = 'block';
             } catch (chartErr) {
                 console.warn('خطا در کپی نمودار:', chartErr);
@@ -994,7 +978,6 @@ async function downloadPDF() {
             pdfChartContainer.style.display = 'none';
         }
 
-        // ========== ۴. عکس‌برداری از کل قالب ==========
         await new Promise(resolve => setTimeout(resolve, 500));
 
         const template = document.getElementById('pdfTemplate');
@@ -1007,7 +990,6 @@ async function downloadPDF() {
             windowWidth: 800
         });
 
-        // ========== ۵. ساخت PDF ==========
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({
             orientation: 'portrait',
@@ -1054,7 +1036,6 @@ async function downloadPDF() {
             }
         }
 
-        // ========== ۶. ذخیره ==========
         const fileName = `flood-risk-${lastAnalysis.lat.toFixed(4)}-${lastAnalysis.lon.toFixed(4)}-${Date.now()}.pdf`;
         doc.save(fileName);
 
@@ -1075,5 +1056,5 @@ async function downloadPDF() {
 window.addEventListener('DOMContentLoaded', function() {
     loadToken();
     initMap();
-    console.log('برنامه با موفقیت راه‌اندازی شد 🚀 (نسخه با نمودار)');
+    console.log('برنامه با موفقیت راه‌اندازی شد 🚀 (نسخه نهایی با نمودار)');
 });
