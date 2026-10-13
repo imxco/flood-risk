@@ -37,6 +37,10 @@ function initMap() {
 
         updateMarker(parseFloat(lat), parseFloat(lon));
         console.log('موقعیت انتخاب شد: ' + lat + ', ' + lon);
+
+        // پاک کردن مقدار دستی قبلی چون مختصات تغییر کرده
+        const manualInput = document.getElementById('manualRiverDistance');
+        if (manualInput) manualInput.value = '';
     });
 }
 
@@ -59,6 +63,10 @@ function updateMarker(lat, lon) {
         document.getElementById('lat').value = pos.lat.toFixed(4);
         document.getElementById('lon').value = pos.lng.toFixed(4);
         updateMarker(pos.lat, pos.lng);
+
+        // پاک کردن مقدار دستی
+        const manualInput = document.getElementById('manualRiverDistance');
+        if (manualInput) manualInput.value = '';
     });
 
     analysisCircle = L.circle([lat, lon], {
@@ -90,7 +98,7 @@ function loadToken() {
         status.textContent = '✅ توکن ذخیره شده است';
         status.className = 'token-status ok';
     } else {
-        status.textContent = '⚠️ توکن وارد نشده است. داده‌های NDVI دریافت نخواهند شد.';
+        status.textContent = '⚠️ توکن وارد نشده است.';
         status.className = 'token-status missing';
     }
 }
@@ -166,7 +174,7 @@ async function getPrecipitation(lat, lon) {
 }
 
 // ============================================================
-// دریافت بارش ماهانه ۱۰ سال اخیر (بازه پویا)
+// دریافت بارش ماهانه ۱۰ سال اخیر
 // ============================================================
 async function getMonthlyPrecipitation(lat, lon) {
     const now = new Date();
@@ -185,9 +193,7 @@ async function getMonthlyPrecipitation(lat, lon) {
         if (!res.ok) throw new Error('خطا در دریافت بارش تاریخی');
         const data = await res.json();
 
-        if (!data.daily || !data.daily.time || !data.daily.precipitation_sum) {
-            return null;
-        }
+        if (!data.daily || !data.daily.time || !data.daily.precipitation_sum) return null;
 
         const times = data.daily.time;
         const precip = data.daily.precipitation_sum;
@@ -256,9 +262,7 @@ async function getMonthlyPrecipitation(lat, lon) {
             },
             rainyMonthsCount: rainyMonthsCount,
             yearsCount: years.length,
-            yearRange: startYear + '-' + endYear,
-            startDate: startDate,
-            endDate: endDate
+            yearRange: startYear + '-' + endYear
         };
 
     } catch (e) {
@@ -296,18 +300,8 @@ async function estimateSlope(lat, lon) {
 // فاصله از نزدیک‌ترین رودخانه (با کوئری گسترده)
 // ============================================================
 async function getRiverDistance(lat, lon) {
-    // شعاع جستجو: ۲۰ کیلومتر
     const radius = 20000;
 
-    // کوئری گسترده‌تر: شامل انواع مختلف آبراهه‌ها
-    // river: رودخانه
-    // stream: نهر
-    // canal: کانال
-    // drain: زهکش
-    // ditch: جوی
-    // wadi: رودخانه فصلی (مهم برای ایران)
-    // rapids: آبشارهای تند
-    // waterfall: آبشار
     const query = '[out:json][timeout:30];' +
         '(' +
             'way["waterway"~"river|stream|canal|drain|ditch|wadi|rapids|waterfall"](around:' + radius + ',' + lat + ',' + lon + ');' +
@@ -315,7 +309,6 @@ async function getRiverDistance(lat, lon) {
         ');' +
         'out geom;';
 
-    // لیست سرورهای جایگزین (به ترتیب اولویت)
     const servers = [
         'https://overpass.private.coffee/api/interpreter',
         'https://overpass-api.de/api/interpreter',
@@ -324,14 +317,12 @@ async function getRiverDistance(lat, lon) {
         'https://overpass.openstreetmap.ru/api/interpreter'
     ];
 
-    // هدرهای لازم برای جلوگیری از خطای 406
     const headers = {
         'Accept': 'application/json',
         'User-Agent': 'FloodRiskApp/1.0 (Educational Project)',
         'Referer': window.location.href
     };
 
-    // امتحان هر سرور به ترتیب
     for (let i = 0; i < servers.length; i++) {
         const serverUrl = servers[i];
         const url = serverUrl + '?data=' + encodeURIComponent(query);
@@ -339,7 +330,6 @@ async function getRiverDistance(lat, lon) {
         console.log('تلاش ' + (i + 1) + ' از ' + servers.length + ': ' + serverUrl);
 
         try {
-            // Timeout 20 ثانیه برای هر سرور
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 20000);
 
@@ -372,12 +362,10 @@ async function getRiverDistance(lat, lon) {
 
             console.log('✅ سرور ' + serverUrl + ': ' + data.elements.length + ' آبراهه یافت شد');
 
-            // محاسبه فاصله تا نزدیک‌ترین نقطه
             let minDistance = Infinity;
             let nearestWaterway = null;
 
             data.elements.forEach(element => {
-                // برای way: از geometry استفاده می‌کنیم
                 if (element.type === 'way' && element.geometry && Array.isArray(element.geometry)) {
                     element.geometry.forEach(point => {
                         const dist = haversineDistance(lat, lon, point.lat, point.lon);
@@ -386,9 +374,7 @@ async function getRiverDistance(lat, lon) {
                             nearestWaterway = element;
                         }
                     });
-                }
-                // برای relation: از members (اگر geometry داشته باشند)
-                else if (element.type === 'relation' && element.members) {
+                } else if (element.type === 'relation' && element.members) {
                     element.members.forEach(member => {
                         if (member.geometry && Array.isArray(member.geometry)) {
                             member.geometry.forEach(point => {
@@ -414,12 +400,10 @@ async function getRiverDistance(lat, lon) {
                 };
             }
 
-            // استخراج نام و نوع
             const tags = nearestWaterway.tags || {};
             const name = tags.name || tags['name:fa'] || tags['name:en'] || 'بدون نام';
             const type = tags.waterway || 'نامشخص';
 
-            // نگاشت نوع به فارسی
             const typeMap = {
                 'river': 'رودخانه',
                 'stream': 'نهر',
@@ -432,7 +416,6 @@ async function getRiverDistance(lat, lon) {
             };
             const typeFa = typeMap[type] || type;
 
-            // فرمت فاصله
             let distanceText;
             if (minDistance < 1000) {
                 distanceText = minDistance.toFixed(0) + ' متر';
@@ -456,15 +439,15 @@ async function getRiverDistance(lat, lon) {
         }
     }
 
-    // اگر همه سرورها خطا دادند
     console.error('❌ همه سرورهای Overpass خطا دادند');
     return null;
 }
+
 // ============================================================
-// محاسبه فاصله هاورساین (بین دو نقطه جغرافیایی)
+// محاسبه فاصله هاورساین
 // ============================================================
 function haversineDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371000; // شعاع زمین به متر
+    const R = 6371000;
     const toRad = deg => deg * Math.PI / 180;
 
     const dLat = toRad(lat2 - lat1);
@@ -482,30 +465,29 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 // نمره‌دهی فاصله از رودخانه
 // ============================================================
 function getRiverScore(distance) {
-    if (distance === null || distance === undefined) return 1; // اگر پیدا نشد، ریسک کم
+    if (distance === null || distance === undefined) return 1;
     if (distance < 100) return 10;
-    if (distance < 200) return 8;
-    if (distance < 300) return 6;
-    if (distance < 500) return 4;
-    return 2;
+    if (distance < 200) return 9;
+    if (distance < 300) return 8;
+    if (distance < 500) return 7;
+    if (distance < 1000) return 5;
+    if (distance < 2000) return 4;
+    if (distance < 5000) return 3;
+    if (distance < 10000) return 2;
+    return 1;
 }
 
 // ============================================================
-// دریافت NDVI از ORNL DAAC
+// دریافت NDVI
 // ============================================================
 async function getNDVI(lat, lon, token) {
-    if (!token) {
-        console.warn('توکن NASA وارد نشده است');
-        return null;
-    }
+    if (!token) return null;
 
     const url = 'https://modis.ornl.gov/rst/api/v1/MOD13Q1/subset' +
         '?latitude=' + lat + '&longitude=' + lon +
         '&band=250m_16_days_NDVI' +
         '&startDate=A2023001&endDate=A2023096' +
         '&kmAboveBelow=1&kmLeftRight=1';
-
-    console.log('NDVI Request URL:', url);
 
     try {
         const res = await fetch(url, {
@@ -516,23 +498,14 @@ async function getNDVI(lat, lon, token) {
             }
         });
 
-        console.log('NDVI Response Status:', res.status);
-
-        if (!res.ok) {
-            console.warn('NDVI request failed:', res.status);
-            return null;
-        }
+        if (!res.ok) return null;
 
         const data = await res.json();
-
-        if (!data.subset || !Array.isArray(data.subset) || data.subset.length === 0) {
-            console.warn('NDVI subset خالی است');
-            return null;
-        }
+        if (!data.subset || !Array.isArray(data.subset) || data.subset.length === 0) return null;
 
         const scale = parseFloat(data.scale) || 0.0001;
-
         const values = [];
+
         data.subset.forEach((item) => {
             let rawValue = null;
             if (item.value !== undefined) rawValue = item.value;
@@ -545,16 +518,12 @@ async function getNDVI(lat, lon, token) {
             if (isNaN(numValue)) return;
 
             const scaledValue = numValue * scale;
-
             if (scaledValue >= -1 && scaledValue <= 1 && numValue !== -3000) {
                 values.push(scaledValue);
             }
         });
 
-        if (values.length === 0) {
-            console.warn('هیچ مقدار NDVI معتبری یافت نشد');
-            return null;
-        }
+        if (values.length === 0) return null;
 
         const avg = values.reduce((a, b) => a + b, 0) / values.length;
 
@@ -572,21 +541,16 @@ async function getNDVI(lat, lon, token) {
 }
 
 // ============================================================
-// دریافت کاربری اراضی از MODIS MCD12Q1
+// دریافت کاربری اراضی
 // ============================================================
 async function getLandCover(lat, lon, token) {
-    if (!token) {
-        console.warn('توکن NASA وارد نشده است');
-        return null;
-    }
+    if (!token) return null;
 
     const url = 'https://modis.ornl.gov/rst/api/v1/MCD12Q1/subset' +
         '?latitude=' + lat + '&longitude=' + lon +
         '&band=LC_Type1' +
         '&startDate=A2022001&endDate=A2022365' +
         '&kmAboveBelow=1&kmLeftRight=1';
-
-    console.log('LandCover Request URL:', url);
 
     try {
         const res = await fetch(url, {
@@ -597,21 +561,10 @@ async function getLandCover(lat, lon, token) {
             }
         });
 
-        console.log('LandCover Response Status:', res.status);
-
-        if (!res.ok) {
-            const errText = await res.text();
-            console.warn('LandCover request failed:', res.status, errText);
-            return null;
-        }
+        if (!res.ok) return null;
 
         const data = await res.json();
-        console.log('LandCover Data:', data);
-
-        if (!data.subset || !Array.isArray(data.subset) || data.subset.length === 0) {
-            console.warn('LandCover subset خالی است');
-            return null;
-        }
+        if (!data.subset || !Array.isArray(data.subset) || data.subset.length === 0) return null;
 
         const classCounts = {};
         data.subset.forEach(item => {
@@ -627,10 +580,7 @@ async function getLandCover(lat, lon, token) {
             classCounts[classCode] = (classCounts[classCode] || 0) + 1;
         });
 
-        if (Object.keys(classCounts).length === 0) {
-            console.warn('هیچ کلاس کاربری اراضی معتبری یافت نشد');
-            return null;
-        }
+        if (Object.keys(classCounts).length === 0) return null;
 
         let dominantClass = null;
         let maxCount = 0;
@@ -648,9 +598,7 @@ async function getLandCover(lat, lon, token) {
             name: info.name,
             nameEn: info.nameEn,
             floodScore: info.floodScore,
-            description: info.description,
-            classCounts: classCounts,
-            totalPixels: Object.values(classCounts).reduce((a, b) => a + b, 0)
+            description: info.description
         };
 
     } catch (e) {
@@ -660,7 +608,7 @@ async function getLandCover(lat, lon, token) {
 }
 
 // ============================================================
-// نگاشت کد IGBP به اطلاعات کاربری اراضی
+// نگاشت کاربری اراضی
 // ============================================================
 function getLandCoverInfo(code) {
     const mapping = {
@@ -683,12 +631,7 @@ function getLandCoverInfo(code) {
         17: { name: 'پهنه آبی', nameEn: 'Water Bodies', floodScore: 10, description: 'سطح آب' }
     };
 
-    return mapping[code] || {
-        name: 'نامشخص',
-        nameEn: 'Unknown',
-        floodScore: 5,
-        description: 'کد نامشخص'
-    };
+    return mapping[code] || { name: 'نامشخص', nameEn: 'Unknown', floodScore: 5, description: '' };
 }
 
 // ============================================================
@@ -827,14 +770,16 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         weightSum += 4;
     }
 
-    // ۸. فاصله از رودخانه (جدید)
+    // ۸. فاصله از رودخانه (فقط اگر داده معتبر باشد)
     if (riverData && riverData.found) {
         const score = getRiverScore(riverData.distance);
         let riverValue = riverData.distanceText;
-        if (riverData.type && riverData.name && riverData.name !== 'بدون نام') {
-            riverValue += ' تا ' + riverData.type + ' ' + riverData.name;
-        } else if (riverData.type) {
-            riverValue += ' تا ' + riverData.type;
+        if (riverData.name && riverData.name !== 'بدون نام' && riverData.name !== 'ورودی دستی') {
+            if (riverData.type && riverData.type !== 'دستی') {
+                riverValue += ' تا ' + riverData.type + ' ' + riverData.name;
+            } else {
+                riverValue += ' تا ' + riverData.name;
+            }
         }
 
         factors.push({
@@ -845,24 +790,15 @@ function calculateRisk(elevation, slopePercent, precipData, monthlyPrecip, ndviD
         });
         totalScore += score * 3;
         weightSum += 3;
-    } else if (riverData && !riverData.found) {
-        // اگر آبراهه‌ای پیدا نشد، ریسک کم
-        factors.push({
-            name: 'فاصله از نزدیک‌ترین آبراهه',
-            value: 'بیش از ۱۰ کیلومتر (بدون آبراهه)',
-            score: 1,
-            weight: 3
-        });
-        totalScore += 1 * 3;
-        weightSum += 3;
     }
+    // اگر riverData نداریم یا found=false → پارامتر از تحلیل حذف می‌شود
 
     const finalScore = weightSum > 0 ? totalScore / weightSum : 0;
     return { factors: factors, finalScore: finalScore };
 }
 
 // ============================================================
-// رسم نمودار بارش ماهانه
+// رسم نمودار بارش
 // ============================================================
 function drawRainChart(monthlyData) {
     const chartSection = document.getElementById('chartSection');
@@ -948,8 +884,7 @@ function drawRainChart(monthlyData) {
         '<div><strong>تعداد ماه‌های پرباران:</strong> ' + monthlyData.rainyMonthsCount + ' ماه</div>' +
         '<div><strong>شاخص تمرکز بارش (PCI):</strong> ' + monthlyData.pci.toFixed(1) +
             ' <span class="pci-badge ' + pciLabel.class + '">' + pciLabel.text + '</span>' +
-        '</div>' +
-        '<div style="font-size: 12px; color: #718096; margin-top: 8px;">PCI پایین‌تر = بارش پخش‌شده (ریسک کمتر) | PCI بالاتر = بارش متمرکز (ریسک بیشتر)</div>';
+        '</div>';
 
     document.getElementById('chartInfo').innerHTML = infoHtml;
     chartSection.style.display = 'block';
@@ -998,9 +933,41 @@ async function analyzeFloodRisk() {
         const monthlyPrecip = results[3];
         const ndviData = results[4];
         const landCoverData = results[5];
-        const riverData = results[6];
+        let riverData = results[6];
 
         loadingEl.style.display = 'none';
+
+        // بررسی فاصله دستی وارد شده
+        const manualInput = document.getElementById('manualRiverDistance');
+        const manualValue = manualInput ? parseFloat(manualInput.value) : NaN;
+
+        // اگر Overpass داده نداد ولی کاربر مقدار دستی وارد کرده
+        if ((!riverData || !riverData.found) && !isNaN(manualValue) && manualValue >= 0) {
+            let distanceText;
+            if (manualValue < 1000) {
+                distanceText = manualValue.toFixed(0) + ' متر (دستی)';
+            } else {
+                distanceText = (manualValue / 1000).toFixed(2) + ' کیلومتر (دستی)';
+            }
+
+            riverData = {
+                distance: manualValue,
+                distanceText: distanceText,
+                name: 'ورودی دستی',
+                type: 'دستی',
+                found: true,
+                manual: true
+            };
+            console.log('✅ استفاده از فاصله دستی: ' + manualValue + ' متر');
+        }
+
+        // نمایش/مخفی کردن فیلد دستی
+        const manualGroup = document.getElementById('manualRiverGroup');
+        if (!riverData || !riverData.found) {
+            if (manualGroup) manualGroup.style.display = 'block';
+        } else {
+            if (manualGroup) manualGroup.style.display = 'none';
+        }
 
         if (elevation === null && !slopeData && !monthlyPrecip) {
             showError('متأسفانه نتوانستیم داده‌ای برای این موقعیت دریافت کنیم.');
@@ -1049,17 +1016,25 @@ async function analyzeFloodRisk() {
             '</div>';
         });
 
+        // پیام‌های هشدار
+        if (riverData && riverData.manual) {
+            detailsHtml += '<p style="color: #38a169; margin-top: 10px; font-size: 13px;">✅ از فاصله دستی وارد شده استفاده شد: ' + riverData.distanceText + '</p>';
+        } else if (riverData && !riverData.found) {
+            detailsHtml += '<p style="color: #d69e2e; margin-top: 10px; font-size: 13px;">⚠️ داده فاصله از رودخانه از سرویس Overpass دریافت نشد. ' +
+                'می‌توانید فاصله را <strong>به صورت دستی</strong> در فیلد زردرنگ بالا وارد کنید و دوباره تحلیل کنید. ' +
+                'در غیر این صورت، این پارامتر از تحلیل حذف شده است.</p>';
+        } else if (!riverData) {
+            detailsHtml += '<p style="color: #d69e2e; margin-top: 10px; font-size: 13px;">⚠️ سرویس Overpass در دسترس نیست. ' +
+                'می‌توانید فاصله را <strong>به صورت دستی</strong> در فیلد زردرنگ بالا وارد کنید و دوباره تحلیل کنید. ' +
+                'در غیر این صورت، این پارامتر از تحلیل حذف شده است.</p>';
+        }
+
         if (!ndviData) {
-            detailsHtml += '<p style="color: #d69e2e; margin-top: 10px;">⚠️ داده NDVI دریافت نشد. ' +
-                (token ? 'ممکن است توکن نامعتبر باشد.' : 'برای دریافت، توکن NASA را وارد کنید.') + '</p>';
+            detailsHtml += '<p style="color: #d69e2e; margin-top: 10px; font-size: 13px;">⚠️ داده NDVI دریافت نشد.</p>';
         }
 
         if (!landCoverData) {
-            detailsHtml += '<p style="color: #d69e2e; margin-top: 10px;">⚠️ داده کاربری اراضی دریافت نشد.</p>';
-        }
-
-        if (!riverData) {
-            detailsHtml += '<p style="color: #d69e2e; margin-top: 10px;">⚠️ داده فاصله از رودخانه دریافت نشد. ممکن است سرویس Overpass در دسترس نباشد.</p>';
+            detailsHtml += '<p style="color: #d69e2e; margin-top: 10px; font-size: 13px;">⚠️ داده کاربری اراضی دریافت نشد.</p>';
         }
 
         document.getElementById('details').innerHTML = detailsHtml;
@@ -1299,5 +1274,5 @@ async function downloadPDF() {
 window.addEventListener('DOMContentLoaded', function() {
     loadToken();
     initMap();
-    console.log('برنامه با موفقیت راه‌اندازی شد 🚀 (نسخه با فاصله از رودخانه)');
+    console.log('برنامه با موفقیت راه‌اندازی شد 🚀');
 });
