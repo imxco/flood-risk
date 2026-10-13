@@ -35,6 +35,12 @@
             <input type="number" id="lon" step="0.0001" placeholder="مثال: 51.3890" value="51.3890">
         </div>
 
+        <div class="form-group" id="manualRiverGroup" style="display: none;">
+            <label>📏 فاصله از نزدیک‌ترین رودخانه (متر) — اختیاری:</label>
+            <input type="number" id="manualRiverDistance" step="10" min="0" placeholder="مثال: 250">
+            <p class="note">اگر این فیلد را پر کنید، در تحلیل استفاده می‌شود. اگر خالی بگذارید، این پارامتر از تحلیل حذف می‌شود.</p>
+        </div>
+
         <button id="analyzeBtn" onclick="analyzeFloodRisk()" class="btn-primary">تحلیل ریسک سیل</button>
 
         <div class="loading" id="loading">⏳ در حال دریافت داده‌ها...</div>
@@ -44,7 +50,7 @@
             <h2 id="riskLevel"></h2>
             <div id="riskScore"></div>
             <div id="details"></div>
-            
+
             <div class="chart-section" id="chartSection" style="display:none;">
                 <h3 id="chartTitle">📊 میانگین بارش ماهانه</h3>
                 <div class="chart-container">
@@ -52,7 +58,7 @@
                 </div>
                 <div class="chart-info" id="chartInfo"></div>
             </div>
-            
+
             <button id="pdfBtn" onclick="downloadPDF()" class="btn-pdf">📄 دانلود گزارش PDF</button>
             <p class="note">⚠️ این تحلیل بر اساس داده‌های جهانی و مدل‌های ساده‌شده انجام شده و جایگزین مطالعات دقیق هیدرولوژیکی نیست.</p>
         </div>
