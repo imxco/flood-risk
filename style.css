@@ -7,7 +7,7 @@ body {
 }
 
 .container {
-    max-width: 850px;
+    max-width: 900px;
     margin: 0 auto;
     background: white;
     border-radius: 12px;
@@ -15,11 +15,69 @@ body {
     padding: 30px;
 }
 
-h1 {
-    color: #1a365d;
+h1 { color: #1a365d; margin-bottom: 20px; text-align: center; }
+
+.search-section {
+    background: #edf2f7;
+    padding: 15px;
+    border-radius: 8px;
     margin-bottom: 20px;
-    text-align: center;
 }
+
+.search-section h3 { font-size: 14px; color: #4a5568; margin-bottom: 10px; }
+
+.search-row {
+    display: flex;
+    gap: 8px;
+}
+
+.search-row input {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 15px;
+}
+
+.search-row select {
+    padding: 10px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 15px;
+    background: white;
+}
+
+.btn-search {
+    padding: 10px 20px;
+    background: #3182ce;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 15px;
+    margin-top: 0;
+    width: auto;
+}
+
+.btn-search:hover { background: #2c5282; }
+
+.search-results {
+    margin-top: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.search-result-item {
+    padding: 10px;
+    background: white;
+    border-radius: 6px;
+    margin-bottom: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    border-right: 3px solid #3182ce;
+}
+
+.search-result-item:hover { background: #e2e8f0; }
 
 .form-group { margin-bottom: 15px; }
 
@@ -28,9 +86,10 @@ label {
     margin-bottom: 5px;
     font-weight: 600;
     color: #2d3748;
+    font-size: 15px;
 }
 
-input {
+input[type="number"] {
     width: 100%;
     padding: 10px;
     border: 2px solid #e2e8f0;
@@ -38,10 +97,7 @@ input {
     font-size: 16px;
 }
 
-input:focus {
-    outline: none;
-    border-color: #3182ce;
-}
+input:focus { outline: none; border-color: #3182ce; }
 
 button {
     width: 100%;
@@ -58,27 +114,16 @@ button {
 .btn-primary:hover { background: #2c5282; }
 .btn-primary:disabled { background: #a0aec0; cursor: not-allowed; }
 
-.btn-secondary {
-    padding: 8px;
-    font-size: 14px;
-    margin-top: 10px;
-    background: #4a5568;
-    color: white;
-}
-.btn-secondary:hover { background: #2d3748; }
+.map-section { margin-bottom: 20px; }
+.map-section h3 { font-size: 14px; color: #4a5568; margin-bottom: 8px; }
 
-.btn-pdf {
-    background: #2f855a;
-    color: white;
-    margin-top: 20px;
-    padding: 12px;
-    font-size: 16px;
-    font-weight: 600;
+#map {
+    width: 100%;
+    height: 400px;
     border-radius: 8px;
-    transition: background 0.2s;
+    border: 2px solid #e2e8f0;
+    z-index: 1;
 }
-.btn-pdf:hover { background: #22543d; }
-.btn-pdf:disabled { background: #a0aec0; cursor: not-allowed; }
 
 .result {
     margin-top: 25px;
@@ -86,22 +131,30 @@ button {
     border-radius: 8px;
     display: none;
 }
+
 .result.show { display: block; }
 
-.result.very-low { background: #c6f6d5; border-left: 5px solid #22543d; }
-.result.low { background: #e6fffa; border-left: 5px solid #38a169; }
-.result.medium { background: #fefcbf; border-left: 5px solid #d69e2e; }
-.result.high { background: #feebc8; border-left: 5px solid #dd6b20; }
-.result.very-high { background: #fed7d7; border-left: 5px solid #e53e3e; }
-
-.result h2 { margin-bottom: 15px; }
-
-.param-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid rgba(0,0,0,0.1);
+.hazard-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-top: 20px;
 }
+
+.hazard-card {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.hazard-card h4 { font-size: 14px; color: #4a5568; margin-bottom: 10px; }
+.hazard-card .score { font-size: 28px; font-weight: bold; }
+.hazard-card .score.low { color: #38a169; }
+.hazard-card .score.medium { color: #d69e2e; }
+.hazard-card .score.high { color: #dd6b20; }
+.hazard-card .score.very-high { color: #e53e3e; }
 
 .error {
     background: #fed7d7;
@@ -119,59 +172,6 @@ button {
     display: none;
 }
 
-.note { font-size: 12px; color: #718096; margin-top: 10px; }
-
-.token-section {
-    background: #edf2f7;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-}
-
-.token-section h3 { font-size: 14px; color: #4a5568; margin-bottom: 10px; }
-
-.token-status { font-size: 13px; margin-top: 8px; }
-.token-status.ok { color: #38a169; }
-.token-status.missing { color: #e53e3e; }
-
-.map-section { margin-bottom: 20px; }
-.map-section h3 { font-size: 14px; color: #4a5568; margin-bottom: 8px; }
-
-#map {
-    width: 100%;
-    height: 400px;
-    border-radius: 8px;
-    border: 2px solid #e2e8f0;
-    z-index: 1;
-}
-
-#manualRiverGroup {
-    background: #fefcbf;
-    padding: 15px;
-    border-radius: 8px;
-    border-right: 4px solid #d69e2e;
-    margin-bottom: 15px;
-    animation: slideDown 0.3s ease-out;
-}
-
-#manualRiverGroup label {
-    color: #744210;
-    font-size: 14px;
-}
-
-#manualRiverGroup input {
-    border-color: #d69e2e;
-}
-
-#manualRiverGroup input:focus {
-    border-color: #b7791f;
-}
-
-@keyframes slideDown {
-    from { opacity: 0; transform: translateY(-10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
 .chart-section {
     margin-top: 25px;
     padding-top: 20px;
@@ -186,41 +186,16 @@ button {
 
 .chart-container {
     position: relative;
-    height: 300px;
+    height: 350px;
     background: white;
     border-radius: 8px;
     padding: 10px;
-    margin-bottom: 15px;
 }
-
-.chart-info {
-    background: white;
-    border-radius: 8px;
-    padding: 15px;
-    font-size: 14px;
-    line-height: 1.8;
-    color: #4a5568;
-}
-
-.chart-info strong { color: #2d3748; }
-
-.pci-badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: bold;
-    color: white;
-}
-
-.pci-low { background: #38a169; }
-.pci-medium { background: #d69e2e; }
-.pci-high { background: #dd6b20; }
-.pci-very-high { background: #e53e3e; }
 
 @media (max-width: 600px) {
     .container { padding: 15px; }
     #map { height: 300px; }
-    .chart-container { height: 250px; }
-    h1 { font-size: 20px; }
+    .hazard-cards { grid-template-columns: 1fr; }
+    .search-row { flex-direction: column; }
+    .btn-search { width: 100%; }
 }
