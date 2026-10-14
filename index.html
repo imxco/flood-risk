@@ -3,25 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ارزیابی ریسک سیل</title>
+    <title>ارزیابی چندمخاطره‌ای</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 </head>
 <body>
     <div class="container">
-        <h1>🌊 ارزیابی ریسک سیل</h1>
+        <h1>🌊 ارزیابی چندمخاطره‌ای</h1>
 
-        <div class="token-section">
-            <h3>🔑 توکن NASA Earthdata (برای دریافت داده‌های NDVI و کاربری اراضی)</h3>
-            <input type="password" id="nasaToken" placeholder="توکن خود را اینجا وارد کنید">
-            <div class="token-status" id="tokenStatus"></div>
-            <button type="button" onclick="saveToken()" class="btn-secondary">ذخیره توکن در مرورگر</button>
-            <p class="note">توکن فقط در حافظه محلی مرورگر شما ذخیره می‌شود و به هیچ سروری ارسال نمی‌گردد.</p>
+        <div class="search-section">
+            <h3>🔍 جستجو</h3>
+            <div class="search-row">
+                <input type="text" id="searchInput" placeholder="نام مکان یا شرکت را وارد کنید...">
+                <select id="searchType">
+                    <option value="place">مکان</option>
+                    <option value="company">شرکت</option>
+                </select>
+                <button onclick="searchLocation()" class="btn-search">جستجو</button>
+            </div>
+            <div id="searchResults" class="search-results"></div>
         </div>
 
         <div class="map-section">
-            <h3>🗺️ موقعیت را روی نقشه انتخاب کنید</h3>
-            <p class="note">روی نقشه کلیک کنید تا مختصات به صورت خودکار پر شود.</p>
+            <h3>🗺️ موقعیت را انتخاب کنید</h3>
             <div id="map"></div>
         </div>
 
@@ -35,96 +39,34 @@
             <input type="number" id="lon" step="0.0001" placeholder="مثال: 51.3890" value="51.3890">
         </div>
 
-        <div class="form-group" id="manualRiverGroup" style="display: none;">
-            <label>📏 فاصله از نزدیک‌ترین رودخانه (متر) — اختیاری:</label>
-            <input type="number" id="manualRiverDistance" step="10" min="0" placeholder="مثال: 250">
-            <p class="note">اگر این فیلد را پر کنید، در تحلیل استفاده می‌شود. اگر خالی بگذارید، این پارامتر از تحلیل حذف می‌شود.</p>
-        </div>
+        <button id="analyzeBtn" onclick="analyzeMultiHazard()" class="btn-primary">تحلیل چندمخاطره‌ای</button>
 
-        <button id="analyzeBtn" onclick="analyzeFloodRisk()" class="btn-primary">تحلیل ریسک سیل</button>
-
-        <div class="loading" id="loading">⏳ در حال دریافت داده‌ها...</div>
+        <div class="loading" id="loading">⏳ در حال تحلیل...</div>
         <div class="error" id="error"></div>
 
         <div class="result" id="result">
-            <h2 id="riskLevel"></h2>
-            <div id="riskScore"></div>
-            <div id="details"></div>
+            <h2 id="overallRisk"></h2>
+            <div id="overallScore"></div>
+
+            <div class="hazard-cards" id="hazardCards"></div>
 
             <div class="chart-section" id="chartSection" style="display:none;">
-                <h3 id="chartTitle">📊 میانگین بارش ماهانه</h3>
+                <h3>📊 نمودار راداری ریسک‌ها</h3>
                 <div class="chart-container">
-                    <canvas id="rainChart"></canvas>
+                    <canvas id="radarChart"></canvas>
                 </div>
-                <div class="chart-info" id="chartInfo"></div>
             </div>
 
-            <button id="pdfBtn" onclick="downloadPDF()" class="btn-pdf">📄 دانلود گزارش PDF</button>
-            <p class="note">⚠️ این تحلیل بر اساس داده‌های جهانی و مدل‌های ساده‌شده انجام شده و جایگزین مطالعات دقیق هیدرولوژیکی نیست.</p>
-        </div>
-    </div>
-
-    <div id="pdfTemplate" style="position: absolute; left: -9999px; top: 0; width: 800px; background: white; padding: 25px; font-family: Tahoma, Arial, sans-serif; direction: rtl;">
-        <div style="background: #3182ce; color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-            <h1 style="margin: 0; font-size: 20px; text-align: center;">🌊 گزارش ارزیابی ریسک سیل</h1>
-            <p id="pdfDate" style="margin: 8px 0 0 0; font-size: 12px; text-align: center;"></p>
-        </div>
-
-        <div style="background: #f7fafc; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
-            <h2 style="margin: 0 0 8px 0; font-size: 15px; color: #2d3748;">📍 موقعیت جغرافیایی</h2>
-            <table style="width: 100%; font-size: 13px;">
-                <tr>
-                    <td style="padding: 4px;">عرض جغرافیایی:</td>
-                    <td style="padding: 4px;"><strong id="pdfLat"></strong></td>
-                    <td style="padding: 4px;">طول جغرافیایی:</td>
-                    <td style="padding: 4px;"><strong id="pdfLon"></strong></td>
-                </tr>
-            </table>
-        </div>
-
-        <div id="pdfScoreBox" style="padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center;">
-            <h2 id="pdfRiskLevel" style="margin: 0 0 8px 0; font-size: 18px; color: white;"></h2>
-            <p id="pdfScore" style="margin: 0; font-size: 16px; color: white; font-weight: bold;"></p>
-        </div>
-
-        <div style="margin-bottom: 15px;">
-            <h2 style="font-size: 15px; color: #2d3748; margin-bottom: 8px;">🗺️ نقشه موقعیت</h2>
-            <div id="pdfMapContainer" style="width: 100%; height: 200px; border-radius: 8px; overflow: hidden; background: #e2e8f0;"></div>
-        </div>
-
-        <div style="margin-bottom: 15px;">
-            <h2 style="font-size: 15px; color: #2d3748; margin-bottom: 8px;">📊 پارامترهای تحلیل‌شده</h2>
-            <table id="pdfParamsTable" style="width: 100%; border-collapse: collapse; font-size: 12px;">
-                <thead>
-                    <tr style="background: #e2e8f0;">
-                        <th style="padding: 6px; border: 1px solid #cbd5e0; text-align: right;">پارامتر</th>
-                        <th style="padding: 6px; border: 1px solid #cbd5e0; text-align: right;">مقدار</th>
-                        <th style="padding: 6px; border: 1px solid #cbd5e0; text-align: center;">نمره</th>
-                        <th style="padding: 6px; border: 1px solid #cbd5e0; text-align: center;">وزن</th>
-                    </tr>
-                </thead>
-                <tbody id="pdfParamsBody"></tbody>
-            </table>
-        </div>
-
-        <div id="pdfChartContainer" style="margin-bottom: 15px; display: none;">
-            <h2 style="font-size: 15px; color: #2d3748; margin-bottom: 8px;">📊 میانگین بارش ماهانه</h2>
-            <div id="pdfChartImage" style="text-align: center;"></div>
-        </div>
-
-        <div style="background: #fefcbf; padding: 12px; border-radius: 8px; border-right: 4px solid #d69e2e; margin-bottom: 15px;">
-            <h2 style="margin: 0 0 6px 0; font-size: 14px; color: #744210;">💡 توصیه</h2>
-            <p id="pdfAdvice" style="margin: 0; font-size: 12px; color: #4a5568; line-height: 1.6;"></p>
-        </div>
-
-        <div style="border-top: 1px solid #e2e8f0; padding-top: 10px; font-size: 10px; color: #718096; text-align: center;">
-            <p style="margin: 4px 0;">⚠️ این تحلیل بر اساس داده‌های جهانی و مدل‌های ساده‌شده انجام شده و جایگزین مطالعات دقیق هیدرولوژیکی نیست.</p>
-            <p style="margin: 4px 0;">تولید شده توسط ابزار ارزیابی ریسک سیل</p>
+            <div class="chart-section" id="barChartSection" style="display:none;">
+                <h3>📊 مقایسه ریسک‌ها</h3>
+                <div class="chart-container">
+                    <canvas id="barChart"></canvas>
+                </div>
+            </div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="script.js"></script>
