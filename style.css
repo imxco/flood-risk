@@ -1,9 +1,14 @@
+/* ============================================================
+   ریست و پایه
+   ============================================================ */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
     font-family: 'Segoe UI', Tahoma, sans-serif;
     background: #f0f4f8;
     padding: 20px;
+    line-height: 1.6;
+    -webkit-text-size-adjust: 100%;
 }
 
 .container {
@@ -15,9 +20,25 @@ body {
     padding: 30px;
 }
 
-h1 { color: #1a365d; margin-bottom: 20px; text-align: center; }
+h1 {
+    color: #1a365d;
+    margin-bottom: 20px;
+    text-align: center;
+    font-size: 26px;
+}
+
+/* ============================================================
+   فرم‌ها
+   ============================================================ */
 .form-group { margin-bottom: 15px; }
-label { display: block; margin-bottom: 5px; font-weight: 600; color: #2d3748; }
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #2d3748;
+    font-size: 15px;
+}
 
 input {
     width: 100%;
@@ -25,10 +46,18 @@ input {
     border: 2px solid #e2e8f0;
     border-radius: 8px;
     font-size: 16px;
+    font-family: inherit;
+    transition: border-color 0.2s;
 }
 
-input:focus { outline: none; border-color: #3182ce; }
+input:focus {
+    outline: none;
+    border-color: #3182ce;
+}
 
+/* ============================================================
+   دکمه‌ها
+   ============================================================ */
 button {
     width: 100%;
     padding: 12px;
@@ -38,6 +67,11 @@ button {
     cursor: pointer;
     margin-top: 10px;
     font-family: inherit;
+    transition: background 0.2s, transform 0.1s;
+}
+
+button:active {
+    transform: scale(0.98);
 }
 
 .btn-primary { background: #3182ce; color: white; }
@@ -61,11 +95,13 @@ button {
     font-size: 16px;
     font-weight: 600;
     border-radius: 8px;
-    transition: background 0.2s;
 }
 .btn-pdf:hover { background: #22543d; }
 .btn-pdf:disabled { background: #a0aec0; cursor: not-allowed; }
 
+/* ============================================================
+   نتیجه
+   ============================================================ */
 .result {
     margin-top: 25px;
     padding: 20px;
@@ -80,15 +116,34 @@ button {
 .result.high { background: #feebc8; border-left: 5px solid #dd6b20; }
 .result.very-high { background: #fed7d7; border-left: 5px solid #e53e3e; }
 
-.result h2 { margin-bottom: 15px; }
+.result h2 {
+    margin-bottom: 15px;
+    font-size: 22px;
+}
 
 .param-row {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     padding: 8px 0;
     border-bottom: 1px solid rgba(0,0,0,0.1);
+    gap: 10px;
 }
 
+.param-row span:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+.param-row span:last-child {
+    text-align: left;
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+/* ============================================================
+   پیام‌ها
+   ============================================================ */
 .error {
     background: #fed7d7;
     color: #c53030;
@@ -96,6 +151,7 @@ button {
     border-radius: 8px;
     margin-top: 15px;
     display: none;
+    font-size: 14px;
 }
 
 .loading {
@@ -103,10 +159,19 @@ button {
     color: #3182ce;
     margin-top: 15px;
     display: none;
+    font-size: 15px;
 }
 
-.note { font-size: 12px; color: #718096; margin-top: 10px; }
+.note {
+    font-size: 12px;
+    color: #718096;
+    margin-top: 10px;
+    line-height: 1.5;
+}
 
+/* ============================================================
+   بخش توکن
+   ============================================================ */
 .token-section {
     background: #edf2f7;
     padding: 15px;
@@ -114,14 +179,28 @@ button {
     margin-bottom: 20px;
 }
 
-.token-section h3 { font-size: 14px; color: #4a5568; margin-bottom: 10px; }
+.token-section h3 {
+    font-size: 14px;
+    color: #4a5568;
+    margin-bottom: 10px;
+}
 
-.token-status { font-size: 13px; margin-top: 8px; }
+.token-status {
+    font-size: 13px;
+    margin-top: 8px;
+}
 .token-status.ok { color: #38a169; }
 .token-status.missing { color: #e53e3e; }
 
+/* ============================================================
+   نقشه
+   ============================================================ */
 .map-section { margin-bottom: 20px; }
-.map-section h3 { font-size: 14px; color: #4a5568; margin-bottom: 8px; }
+.map-section h3 {
+    font-size: 14px;
+    color: #4a5568;
+    margin-bottom: 8px;
+}
 
 #map {
     width: 100%;
@@ -131,6 +210,9 @@ button {
     z-index: 1;
 }
 
+/* ============================================================
+   فیلد دستی فاصله از رودخانه
+   ============================================================ */
 #manualRiverGroup {
     background: #fefcbf;
     padding: 15px;
@@ -158,6 +240,9 @@ button {
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* ============================================================
+   نمودار
+   ============================================================ */
 .chart-section {
     margin-top: 25px;
     padding-top: 20px;
@@ -177,6 +262,8 @@ button {
     border-radius: 8px;
     padding: 10px;
     margin-bottom: 15px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .chart-info {
@@ -186,6 +273,7 @@ button {
     font-size: 14px;
     line-height: 1.8;
     color: #4a5568;
+    word-wrap: break-word;
 }
 
 .chart-info strong { color: #2d3748; }
@@ -204,9 +292,234 @@ button {
 .pci-high { background: #dd6b20; }
 .pci-very-high { background: #e53e3e; }
 
+/* ============================================================
+   Media Query: تبلت (حداکثر ۷۶۸ پیکسل)
+   ============================================================ */
+@media (max-width: 768px) {
+    body { padding: 15px; }
+
+    .container {
+        padding: 20px;
+        border-radius: 10px;
+    }
+
+    h1 { font-size: 22px; }
+
+    #map { height: 350px; }
+
+    .chart-container { height: 280px; }
+
+    .result h2 { font-size: 20px; }
+
+    button {
+        font-size: 16px;
+        padding: 11px;
+    }
+
+    .btn-pdf { font-size: 15px; }
+}
+
+/* ============================================================
+   Media Query: موبایل (حداکثر ۶۰۰ پیکسل)
+   ============================================================ */
 @media (max-width: 600px) {
-    .container { padding: 15px; }
+    body {
+        padding: 10px;
+        font-size: 14px;
+    }
+
+    .container {
+        padding: 15px;
+        border-radius: 8px;
+    }
+
+    h1 {
+        font-size: 19px;
+        margin-bottom: 15px;
+    }
+
+    label { font-size: 14px; }
+
+    input {
+        font-size: 15px;
+        padding: 9px;
+    }
+
+    button {
+        font-size: 15px;
+        padding: 10px;
+        margin-top: 8px;
+    }
+
+    .btn-secondary {
+        font-size: 13px;
+        padding: 7px;
+    }
+
+    .btn-pdf {
+        font-size: 14px;
+        padding: 11px;
+    }
+
+    /* نقشه کوتاه‌تر */
+    #map {
+        height: 280px;
+        border-radius: 6px;
+    }
+
+    .map-section h3 { font-size: 13px; }
+
+    /* نتیجه */
+    .result {
+        padding: 15px;
+        margin-top: 20px;
+    }
+
+    .result h2 {
+        font-size: 18px;
+        margin-bottom: 12px;
+    }
+
+    /* جدول پارامترها: عمودی */
+    .param-row {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 10px 0;
+        gap: 4px;
+    }
+
+    .param-row span:first-child {
+        font-weight: 600;
+        color: #2d3748;
+        font-size: 14px;
+    }
+
+    .param-row span:last-child {
+        font-size: 13px;
+        color: #4a5568;
+        text-align: right;
+        width: 100%;
+    }
+
+    /* نمودار */
+    .chart-container {
+        height: 240px;
+        padding: 5px;
+    }
+
+    .chart-section h3 { font-size: 14px; }
+
+    .chart-info {
+        padding: 12px;
+        font-size: 13px;
+    }
+
+    /* توکن */
+    .token-section {
+        padding: 12px;
+        margin-bottom: 15px;
+    }
+
+    .token-section h3 {
+        font-size: 13px;
+        line-height: 1.4;
+    }
+
+    .token-status { font-size: 12px; }
+
+    /* فیلد دستی */
+    #manualRiverGroup {
+        padding: 12px;
+    }
+
+    #manualRiverGroup label {
+        font-size: 13px;
+    }
+
+    .note { font-size: 11px; }
+}
+
+/* ============================================================
+   Media Query: موبایل کوچک (حداکثر ۴۰۰ پیکسل)
+   ============================================================ */
+@media (max-width: 400px) {
+    body { padding: 5px; }
+
+    .container {
+        padding: 12px;
+        border-radius: 6px;
+    }
+
+    h1 {
+        font-size: 17px;
+        margin-bottom: 12px;
+    }
+
+    #map { height: 240px; }
+
+    .chart-container { height: 220px; }
+
+    .result { padding: 12px; }
+
+    .result h2 { font-size: 16px; }
+
+    .param-row span:first-child { font-size: 13px; }
+    .param-row span:last-child { font-size: 12px; }
+
+    button {
+        font-size: 14px;
+        padding: 9px;
+    }
+
+    .btn-pdf { font-size: 13px; }
+
+    .chart-info { font-size: 12px; }
+
+    .token-section h3 { font-size: 12px; }
+}
+
+/* ============================================================
+   حالت افقی در موبایل (Landscape)
+   ============================================================ */
+@media (max-width: 900px) and (orientation: landscape) {
     #map { height: 300px; }
     .chart-container { height: 250px; }
-    h1 { font-size: 20px; }
+}
+
+/* ============================================================
+   چاپ (Print)
+   ============================================================ */
+@media print {
+    body { background: white; padding: 0; }
+
+    .container {
+        box-shadow: none;
+        padding: 0;
+        max-width: 100%;
+    }
+
+    .token-section,
+    .map-section,
+    #manualRiverGroup,
+    button {
+        display: none !important;
+    }
+
+    .result { display: block !important; }
+}
+
+/* ============================================================
+   حالت تاریک (Dark Mode) — اختیاری
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+    /* اگر کاربر حالت تاریک سیستم دارد، این بخش اعمال می‌شود */
+    /* فعلاً غیرفعال است. برای فعال‌سازی، کامنت را بردارید. */
+    /*
+    body { background: #1a202c; color: #e2e8f0; }
+    .container { background: #2d3748; color: #e2e8f0; }
+    h1 { color: #90cdf4; }
+    label { color: #e2e8f0; }
+    input { background: #4a5568; color: #e2e8f0; border-color: #4a5568; }
+    .param-row { border-color: rgba(255,255,255,0.1); }
+    */
 }
