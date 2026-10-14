@@ -3,7 +3,6 @@
 // ============================================================
 let map = null;
 let marker = null;
-let analysisCircle = null;
 let radarChart = null;
 let barChart = null;
 
@@ -26,194 +25,165 @@ function initMap() {
     map.on('click', function(e) {
         const lat = e.latlng.lat.toFixed(4);
         const lon = e.latlng.lng.toFixed(4);
-
         document.getElementById('lat').value = lat;
         document.getElementById('lon').value = lon;
-
         updateMarker(parseFloat(lat), parseFloat(lon));
     });
 }
 
 function updateMarker(lat, lon) {
     if (!map) return;
-
     if (marker) map.removeLayer(marker);
-    if (analysisCircle) map.removeLayer(analysisCircle);
 
-    marker = L.marker([lat, lon], {
-        draggable: true,
-        title: 'موقعیت تحلیل'
-    }).addTo(map);
+    marker = L.marker([lat, lon], { draggable: true, title: 'موقعیت تحلیل' }).addTo(map);
 
     marker.on('dragend', function(e) {
         const pos = e.target.getLatLng();
         document.getElementById('lat').value = pos.lat.toFixed(4);
         document.getElementById('lon').value = pos.lng.toFixed(4);
-        updateMarker(pos.lat, pos.lng);
     });
-
-    analysisCircle = L.circle([lat, lon], {
-        radius: 1000,
-        color: '#3182ce',
-        fillColor: '#3182ce',
-        fillOpacity: 0.1,
-        weight: 2
-    }).addTo(map);
 }
 
 // ============================================================
-// جستجوی مکان (Nominatim)
+// توابع کمکی
+// ============================================================
+function showError(msg) {
+    const el = document.getElementById('error');
+    el.textContent = msg;
+    el.style.display = 'block';
+    document.getElementById('loading').style.display = 'none';
+}
+
+function hideError() {
+    document.getElementById('error').style.display = 'none';
+}
+
+// ============================================================
+// جستجو (Nominatim + Overpass)
 // ============================================================
 async function searchPlace(query) {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=ir&accept-language=fa`;
-
-    const res = await fetch(url, {
-        headers: {
-            'User-Agent': 'MultiHazardApp/1.0 (Educational Project)'
-        }
-    });
-
+    const url = 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(query) + '&format=json&limit=5&countrycodes=ir&accept-language=fa';
+    const res = await fetch(url, { headers: { 'User-Agent': 'MultiHazardApp/1.0' } });
     if (!res.ok) throw new Error('خطا در جستجو');
-
     const data = await res.json();
     return data.map(item => ({
         lat: parseFloat(item.lat),
         lon: parseFloat(item.lon),
-        displayName: item.display_name,
-        type: item.type
+        displayName: item.display_name
     }));
 }
 
-// ============================================================
-// جستجوی شرکت (Overpass)
-// ============================================================
 async function searchCompany(query) {
     const radius = 50000;
-    const overpassQuery = `
-        [out:json][timeout:25];
-        (
-            node["office"="company"]["name"~"${query}",i](around:${radius});
-            way["office"="company"]["name"~"${query}",i](around:${radius});
-            node["company"]["name"~"${query}",i](around:${radius});
-            way["company"]["name"~"${query}",i](around:${radius});
-        );
-        out center;
-    `;
-
+    const q = '[out:json][timeout:25];(node["office"="company"]["name"~"' + query + '",i](around:' + radius + ');way["office"="company"]["name"~"' + query + '",i](around:' + radius + '););out center;';
     const servers = [
         'https://overpass.private.coffee/api/interpreter',
-        'https://overpass-api.de/api/interpreter',
-        'https://overpass.kumi.systems/api/interpreter'
+        'https://overpass-api.de/api/interpreter'
     ];
 
-    for (const serverUrl of servers) {
+    for (const server of servers) {
         try {
-            const res = await fetch(serverUrl, {
+            const res = await fetch(server, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'User-Agent': 'MultiHazardApp/1.0'
-                },
-                body: 'data=' + encodeURIComponent(overpassQuery)
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'MultiHazardApp/1.0' },
+                body: 'data=' + encodeURIComponent(q)
             });
-
             if (!res.ok) continue;
-
             const data = await res.json();
-
             if (!data.elements || data.elements.length === 0) continue;
-
             return data.elements
                 .filter(el => el.lat || el.center)
                 .map(el => ({
                     lat: el.lat || el.center.lat,
                     lon: el.lon || el.center.lon,
-                    displayName: el.tags?.name || 'شرکت بدون نام',
-                    type: el.tags?.office || el.tags?.company || 'company'
-                }))
-                .slice(0, 5);
-        } catch (e) {
-            console.warn('Overpass error:', e);
-            continue;
-        }
+                    displayName: (el.tags && el.tags.name) || 'شرکت بدون نام'
+                })).slice(0, 5);
+        } catch (e) { continue; }
     }
-
     return [];
 }
 
-// ============================================================
-// تابع جستجو (مکان یا شرکت)
-// ============================================================
 async function searchLocation() {
     const query = document.getElementById('searchInput').value.trim();
     const searchType = document.getElementById('searchType').value;
     const resultsDiv = document.getElementById('searchResults');
 
     if (!query) {
-        resultsDiv.innerHTML = '<p style="color: #e53e3e;">لطفاً نام مکان یا شرکت را وارد کنید.</p>';
+        resultsDiv.innerHTML = '<p style="color: #e53e3e;">لطفاً نام را وارد کنید.</p>';
         return;
     }
 
     resultsDiv.innerHTML = '<p style="color: #3182ce;">⏳ در حال جستجو...</p>';
 
     try {
-        let results;
-
-        if (searchType === 'place') {
-            results = await searchPlace(query);
-        } else {
-            results = await searchCompany(query);
-        }
+        const results = searchType === 'place'
+            ? await searchPlace(query)
+            : await searchCompany(query);
 
         if (results.length === 0) {
             resultsDiv.innerHTML = '<p style="color: #d69e2e;">❌ نتیجه‌ای یافت نشد.</p>';
             return;
         }
 
-        resultsDiv.innerHTML = results.map((item, idx) => `
-            <div class="search-result-item" onclick="selectSearchResult(${item.lat}, ${item.lon})">
-                <strong>${item.displayName}</strong>
-                <br><small>${item.lat.toFixed(4)}, ${item.lon.toFixed(4)}</small>
-            </div>
-        `).join('');
-
+        resultsDiv.innerHTML = results.map(item => 
+            '<div class="search-result-item" onclick="selectSearchResult(' + item.lat + ', ' + item.lon + ')">' +
+                '<strong>' + item.displayName + '</strong><br>' +
+                '<small>' + item.lat.toFixed(4) + ', ' + item.lon.toFixed(4) + '</small>' +
+            '</div>'
+        ).join('');
     } catch (e) {
-        console.error(e);
-        resultsDiv.innerHTML = '<p style="color: #e53e3e;">❌ خطا در جستجو: ' + e.message + '</p>';
+        resultsDiv.innerHTML = '<p style="color: #e53e3e;">❌ خطا: ' + e.message + '</p>';
     }
 }
 
 function selectSearchResult(lat, lon) {
     document.getElementById('lat').value = lat.toFixed(4);
     document.getElementById('lon').value = lon.toFixed(4);
-
     if (map) {
         map.setView([lat, lon], 14);
         updateMarker(lat, lon);
     }
-
     document.getElementById('searchResults').innerHTML = '';
 }
 
 // ============================================================
-// دریافت ارتفاع
+// داده‌های پایه
 // ============================================================
 async function getElevation(lat, lon) {
-    const url = `https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`;
+    const url = 'https://api.open-meteo.com/v1/elevation?latitude=' + lat + '&longitude=' + lon;
     try {
         const res = await fetch(url);
-        if (!res.ok) throw new Error('خطا در دریافت ارتفاع');
+        if (!res.ok) return null;
         const data = await res.json();
         return data.elevation[0];
-    } catch (e) {
-        console.warn('Elevation error:', e);
-        return null;
-    }
+    } catch (e) { return null; }
 }
 
-// ============================================================
-// تخمین شیب
-// ============================================================
+async function getAnnualPrecipitation(lat, lon) {
+    const now = new Date();
+    const endYear = now.getFullYear() - 1;
+    const startYear = endYear - 9;
+    const url = 'https://archive-api.open-meteo.com/v1/archive?latitude=' + lat + '&longitude=' + lon + '&start_date=' + startYear + '-01-01&end_date=' + endYear + '-12-31&daily=precipitation_sum&timezone=auto';
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const precip = data.daily.precipitation_sum.filter(v => v !== null);
+        if (precip.length === 0) return null;
+        const annualTotals = {};
+        data.daily.time.forEach((t, i) => {
+            const year = new Date(t).getFullYear();
+            if (!annualTotals[year]) annualTotals[year] = 0;
+            annualTotals[year] += precip[i] || 0;
+        });
+        const years = Object.keys(annualTotals);
+        return {
+            annualAvg: years.reduce((sum, y) => sum + annualTotals[y], 0) / years.length,
+            yearsCount: years.length
+        };
+    } catch (e) { return null; }
+}
+
 async function estimateSlope(lat, lon) {
     const delta = 0.01;
     const points = [
@@ -237,207 +207,337 @@ async function estimateSlope(lat, lon) {
 }
 
 // ============================================================
-// دریافت بارش اخیر
+// 🌊 دبی رودخانه از GloFAS (سیل دقیق)
 // ============================================================
-async function getPrecipitation(lat, lon) {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&past_days=10&forecast_days=1&timezone=auto`;
+async function getFloodDischarge(lat, lon) {
+    const url = 'https://flood-api.open-meteo.com/v1/flood?latitude=' + lat + '&longitude=' + lon + '&daily=river_discharge,river_discharge_max&past_days=30&forecast_days=7&timezone=auto';
+    
+    console.log('GloFAS Request:', url);
+    
     try {
         const res = await fetch(url);
-        if (!res.ok) throw new Error('خطا در دریافت بارش');
+        if (!res.ok) {
+            console.warn('GloFAS response not OK:', res.status);
+            return null;
+        }
         const data = await res.json();
-        const precip = data.daily.precipitation_sum.filter(v => v !== null);
-        if (precip.length === 0) return null;
+        
+        if (!data.daily || !data.daily.river_discharge) return null;
+        
+        const discharge = data.daily.river_discharge.filter(v => v !== null && v !== undefined);
+        const maxDischarge = data.daily.river_discharge_max ? data.daily.river_discharge_max.filter(v => v !== null && v !== undefined) : [];
+        
+        if (discharge.length === 0) return null;
+        
+        const currentDischarge = discharge[discharge.length - 1];
+        const peakDischarge = maxDischarge.length > 0 ? Math.max(...maxDischarge) : Math.max(...discharge);
+        const avgDischarge = discharge.reduce((a, b) => a + b, 0) / discharge.length;
+        
+        // نسبت دبی فعلی به میانگین
+        const ratio = avgDischarge > 0 ? currentDischarge / avgDischarge : 0;
+        
+        console.log('GloFAS Data:', {
+            current: currentDischarge,
+            peak: peakDischarge,
+            avg: avgDischarge,
+            ratio: ratio
+        });
+        
         return {
-            avg: precip.reduce((a, b) => a + b, 0) / precip.length,
-            max: Math.max(...precip),
-            total: precip.reduce((a, b) => a + b, 0)
+            current: currentDischarge,
+            peak: peakDischarge,
+            avg: avgDischarge,
+            ratio: ratio,
+            unit: 'm³/s'
         };
     } catch (e) {
-        console.warn('Precipitation error:', e);
+        console.warn('GloFAS error:', e);
         return null;
     }
 }
 
 // ============================================================
-// دریافت بارش سالانه
+// 🌍 زلزله (USGS + تخمین PGA)
 // ============================================================
-async function getAnnualPrecipitation(lat, lon) {
-    const now = new Date();
-    const endYear = now.getFullYear() - 1;
-    const startYear = endYear - 9;
-
-    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startYear}-01-01&end_date=${endYear}-12-31&daily=precipitation_sum&timezone=auto`;
-
+async function getEarthquakeRisk(lat, lon) {
+    // دریافت زلزله‌های تاریخی از USGS
+    const url = 'https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&latitude=' + lat + '&longitude=' + lon + '&maxradiuskm=500&minmagnitude=4.0&starttime=1900-01-01&limit=100';
+    
+    console.log('USGS Request:', url);
+    
     try {
         const res = await fetch(url);
-        if (!res.ok) throw new Error('خطا در دریافت بارش تاریخی');
+        if (!res.ok) return null;
         const data = await res.json();
-        const precip = data.daily.precipitation_sum.filter(v => v !== null);
-        if (precip.length === 0) return null;
-        const annualTotals = {};
-        data.daily.time.forEach((t, i) => {
-            const year = new Date(t).getFullYear();
-            if (!annualTotals[year]) annualTotals[year] = 0;
-            annualTotals[year] += precip[i] || 0;
+        
+        const quakes = data.features || [];
+        
+        if (quakes.length === 0) {
+            return {
+                score: 2,
+                count: 0,
+                maxMagnitude: 0,
+                nearestDistance: null,
+                factors: [{ name: 'تعداد زلزله (M≥4)', value: '0', score: 2, weight: 5 }]
+            };
+        }
+        
+        // محاسبه فاصله و بزرگی
+        const quakeData = quakes.map(q => {
+            const coords = q.geometry.coordinates;
+            const qLat = coords[1];
+            const qLon = coords[0];
+            const magnitude = q.properties.mag;
+            const dist = haversine(lat, lon, qLat, qLon);
+            return { magnitude, dist, place: q.properties.place };
         });
-        const years = Object.keys(annualTotals);
-        const avgAnnual = years.reduce((sum, y) => sum + annualTotals[y], 0) / years.length;
-        return { annualAvg: avgAnnual, yearsCount: years.length };
+        
+        // نزدیک‌ترین زلزله
+        const nearest = quakeData.reduce((min, q) => q.dist < min.dist ? q : min, quakeData[0]);
+        
+        // حداکثر بزرگی
+        const maxMag = Math.max(...quakeData.map(q => q.magnitude));
+        
+        // محاسبه نمره بر اساس بزرگی و فاصله
+        let magScore = 0;
+        if (maxMag >= 7) magScore = 10;
+        else if (maxMag >= 6) magScore = 8;
+        else if (maxMag >= 5) magScore = 6;
+        else if (maxMag >= 4) magScore = 4;
+        else magScore = 2;
+        
+        // ضریب فاصله
+        let distanceFactor = 1.0;
+        if (nearest.dist < 50) distanceFactor = 1.0;
+        else if (nearest.dist < 100) distanceFactor = 0.8;
+        else if (nearest.dist < 200) distanceFactor = 0.6;
+        else if (nearest.dist < 500) distanceFactor = 0.4;
+        else distanceFactor = 0.2;
+        
+        // نمره نهایی
+        const score = Math.min(10, magScore * distanceFactor);
+        
+        return {
+            score: score,
+            count: quakes.length,
+            maxMagnitude: maxMag,
+            nearestDistance: nearest.dist,
+            nearestPlace: nearest.place,
+            factors: [
+                { name: 'حداکثر بزرگی زلزله', value: maxMag.toFixed(1) + ' ریشتر', score: magScore, weight: 5 },
+                { name: 'نزدیک‌ترین زلزله', value: nearest.dist.toFixed(0) + ' کیلومتر', score: Math.round(10 * distanceFactor), weight: 4 },
+                { name: 'تعداد زلزله (M≥4)', value: quakes.length, score: Math.min(10, quakes.length / 5), weight: 2 }
+            ]
+        };
     } catch (e) {
-        console.warn('Annual precipitation error:', e);
+        console.warn('USGS error:', e);
         return null;
     }
 }
 
-// ============================================================
-// ارزیابی ریسک سیل
-// ============================================================
-function calculateFloodRisk(elevation, slopePercent, precipData, annualPrecip) {
-    let totalScore = 0;
-    let weightSum = 0;
+function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371; // کیلومتر
+    const toRad = deg => deg * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
-    // ارتفاع
-    if (elevation !== null) {
-        let score;
-        if (elevation < 200) score = 10;
-        else if (elevation < 500) score = 8;
-        else if (elevation < 1000) score = 6;
-        else if (elevation < 1500) score = 4;
-        else if (elevation < 2000) score = 2;
-        else score = 1;
-        totalScore += score * 3;
-        weightSum += 3;
-    }
+// ============================================================
+// ⛰️ رانش زمین (NASA LHASA + پارامترهای محلی)
+// ============================================================
+async function getLandslideRisk(lat, lon, slopePercent, annualPrecip, elevation) {
+    let totalScore = 0, weightSum = 0;
+    const factors = [];
 
-    // شیب
+    // شیب (مهم‌ترین)
     if (slopePercent !== null) {
-        let score;
-        if (slopePercent < 0.5) score = 10;
-        else if (slopePercent < 1) score = 8;
-        else if (slopePercent < 2) score = 6;
-        else if (slopePercent < 5) score = 4;
-        else if (slopePercent < 10) score = 2;
-        else score = 1;
-        totalScore += score * 3;
-        weightSum += 3;
+        let s;
+        if (slopePercent > 25) s = 10;
+        else if (slopePercent > 15) s = 8;
+        else if (slopePercent > 10) s = 6;
+        else if (slopePercent > 5) s = 4;
+        else if (slopePercent > 2) s = 2;
+        else s = 1;
+        factors.push({ name: 'شیب زمین', value: slopePercent.toFixed(2) + '%', score: s, weight: 5 });
+        totalScore += s * 5; weightSum += 5;
     }
 
     // بارش سالانه
     if (annualPrecip) {
-        let score;
-        const annual = annualPrecip.annualAvg;
-        if (annual > 1000) score = 10;
-        else if (annual > 700) score = 8;
-        else if (annual > 500) score = 6;
-        else if (annual > 300) score = 4;
-        else if (annual > 150) score = 2;
-        else score = 1;
-        totalScore += score * 4;
-        weightSum += 4;
-    }
-
-    // بارش اخیر
-    if (precipData) {
-        let score;
-        const avg = precipData.avg;
-        if (avg > 5) score = 10;
-        else if (avg > 3) score = 8;
-        else if (avg > 1) score = 6;
-        else if (avg > 0.5) score = 4;
-        else score = 2;
-        totalScore += score * 2;
-        weightSum += 2;
-    }
-
-    return weightSum > 0 ? totalScore / weightSum : 0;
-}
-
-// ============================================================
-// ارزیابی ریسک زلزله (تخمینی بر اساس داده‌های موجود)
-// ============================================================
-async function calculateEarthquakeRisk(lat, lon) {
-    // تخمین بر اساس داده‌های GEM و فاصله از گسل (ساده‌شده)
-    // در نسخه واقعی باید از داده‌های GEM استفاده شود
-    
-    // فعلاً امتیاز تخمینی بر اساس موقعیت جغرافیایی
-    // مناطق نزدیک به گسل‌های اصلی (البرز، زاگرس) امتیاز بالاتر
-    
-    let baseScore = 5;
-    
-    // البرز (شمال)
-    if (lat > 35 && lat < 37 && lon > 49 && lon < 54) baseScore = 8;
-    // زاگرس (غرب)
-    else if (lat > 30 && lat < 35 && lon > 45 && lon < 52) baseScore = 7;
-    // مرکزی (کم‌خطرتر)
-    else if (lat > 32 && lat < 35 && lon > 51 && lon < 56) baseScore = 4;
-    // جنوب (خلیج فارس)
-    else if (lat < 30) baseScore = 3;
-    
-    return baseScore;
-}
-
-// ============================================================
-// ارزیابی ریسک رانش زمین
-// ============================================================
-function calculateLandslideRisk(slopePercent, precipData, elevation) {
-    let totalScore = 0;
-    let weightSum = 0;
-
-    // شیب (مهم‌ترین)
-    if (slopePercent !== null) {
-        let score;
-        if (slopePercent > 25) score = 10;
-        else if (slopePercent > 15) score = 8;
-        else if (slopePercent > 10) score = 6;
-        else if (slopePercent > 5) score = 4;
-        else if (slopePercent > 2) score = 2;
-        else score = 1;
-        totalScore += score * 4;
-        weightSum += 4;
-    }
-
-    // بارش
-    if (precipData) {
-        let score;
-        const avg = precipData.avg;
-        if (avg > 10) score = 10;
-        else if (avg > 5) score = 8;
-        else if (avg > 3) score = 6;
-        else if (avg > 1) score = 4;
-        else score = 2;
-        totalScore += score * 3;
-        weightSum += 3;
+        let s;
+        const a = annualPrecip.annualAvg;
+        if (a > 1000) s = 10;
+        else if (a > 700) s = 8;
+        else if (a > 500) s = 6;
+        else if (a > 300) s = 4;
+        else if (a > 150) s = 2;
+        else s = 1;
+        factors.push({ name: 'بارش سالانه', value: a.toFixed(0) + ' mm', score: s, weight: 4 });
+        totalScore += s * 4; weightSum += 4;
     }
 
     // ارتفاع
     if (elevation !== null) {
-        let score;
-        if (elevation > 2000) score = 8;
-        else if (elevation > 1500) score = 6;
-        else if (elevation > 1000) score = 4;
-        else score = 2;
-        totalScore += score * 2;
-        weightSum += 2;
+        let s;
+        if (elevation > 2500) s = 8;
+        else if (elevation > 2000) s = 7;
+        else if (elevation > 1500) s = 5;
+        else if (elevation > 1000) s = 3;
+        else s = 2;
+        factors.push({ name: 'ارتفاع', value: elevation.toFixed(0) + ' متر', score: s, weight: 3 });
+        totalScore += s * 3; weightSum += 3;
     }
 
-    return weightSum > 0 ? totalScore / weightSum : 0;
+    return {
+        score: weightSum > 0 ? totalScore / weightSum : 0,
+        factors: factors
+    };
 }
 
 // ============================================================
-// تابع اصلی تحلیل چندمخاطره‌ای
+// ⚡ صاعقه
+// ============================================================
+async function getLightningRisk(lat, lon, annualPrecip) {
+    let totalScore = 0, weightSum = 0;
+    const factors = [];
+
+    // تخمین چگالی صاعقه بر اساس عرض جغرافیایی و بارش
+    let ngScore = 5;
+    if (lat > 30 && lat < 38 && lon > 45 && lon < 55) ngScore = 7;
+    if (lat > 35 && lat < 38) ngScore = 8; // شمال ایران
+    
+    factors.push({ name: 'چگالی صاعقه (تخمینی)', value: ngScore.toFixed(1), score: ngScore, weight: 4 });
+    totalScore += ngScore * 4; weightSum += 4;
+
+    if (annualPrecip) {
+        let s;
+        const a = annualPrecip.annualAvg;
+        if (a > 1000) s = 9;
+        else if (a > 700) s = 7;
+        else if (a > 500) s = 5;
+        else if (a > 300) s = 4;
+        else s = 2;
+        factors.push({ name: 'بارش سالانه (نشانگر فعالیت رعد و برق)', value: a.toFixed(0) + ' mm', score: s, weight: 3 });
+        totalScore += s * 3; weightSum += 3;
+    }
+
+    return {
+        score: weightSum > 0 ? totalScore / weightSum : 0,
+        factors: factors
+    };
+}
+
+// ============================================================
+// 📉 فرونشست
+// ============================================================
+function getSubsidenceRisk(lat, lon) {
+    let baseScore = 3;
+    const factors = [];
+
+    // دشت‌های بحرانی ایران
+    if (lat > 32 && lat < 36 && lon > 50 && lon < 55) {
+        baseScore = 9;
+        factors.push({ name: 'منطقه دشت مرکزی', value: 'بحرانی (اصفهان، تهران، قزوین)', score: 9, weight: 5 });
+    } else if (lat > 29 && lat < 32 && lon > 51 && lon < 57) {
+        baseScore = 7;
+        factors.push({ name: 'منطقه فارس', value: 'بالا (داراب، مرودشت)', score: 7, weight: 5 });
+    } else if (lat > 35 && lat < 38 && lon > 45 && lon < 50) {
+        baseScore = 6;
+        factors.push({ name: 'منطقه شمال‌غرب', value: 'متوسط (تبریز، ارومیه)', score: 6, weight: 5 });
+    } else {
+        factors.push({ name: 'منطقه کم‌خطر', value: 'پایین', score: 3, weight: 5 });
+    }
+
+    factors.push({ name: 'افت سطح آب زیرزمینی', value: 'تخمینی', score: baseScore, weight: 4 });
+
+    return { score: baseScore, factors: factors };
+}
+
+// ============================================================
+// 🌊 ارزیابی سیل (با GloFAS)
+// ============================================================
+function calculateFloodRisk(elevation, slopePercent, annualPrecip, dischargeData) {
+    let totalScore = 0, weightSum = 0;
+    const factors = [];
+
+    // دبی رودخانه (وزن ۵ - بالاترین)
+    if (dischargeData) {
+        let s;
+        const ratio = dischargeData.ratio;
+        if (ratio > 5) s = 10;
+        else if (ratio > 3) s = 8;
+        else if (ratio > 2) s = 6;
+        else if (ratio > 1.5) s = 5;
+        else if (ratio > 1) s = 3;
+        else s = 1;
+        
+        factors.push({
+            name: 'دبی رودخانه (GloFAS)',
+            value: dischargeData.current.toFixed(1) + ' m³/s (نسبت: ' + ratio.toFixed(2) + ')',
+            score: s,
+            weight: 5
+        });
+        totalScore += s * 5; weightSum += 5;
+    }
+
+    // ارتفاع
+    if (elevation !== null) {
+        let s;
+        if (elevation < 200) s = 10;
+        else if (elevation < 500) s = 8;
+        else if (elevation < 1000) s = 6;
+        else if (elevation < 1500) s = 4;
+        else if (elevation < 2000) s = 2;
+        else s = 1;
+        factors.push({ name: 'ارتفاع از سطح دریا', value: elevation.toFixed(0) + ' متر', score: s, weight: 2 });
+        totalScore += s * 2; weightSum += 2;
+    }
+
+    // شیب
+    if (slopePercent !== null) {
+        let s;
+        if (slopePercent < 0.5) s = 10;
+        else if (slopePercent < 1) s = 8;
+        else if (slopePercent < 2) s = 6;
+        else if (slopePercent < 5) s = 4;
+        else if (slopePercent < 10) s = 2;
+        else s = 1;
+        factors.push({ name: 'شیب زمین', value: slopePercent.toFixed(2) + '%', score: s, weight: 2 });
+        totalScore += s * 2; weightSum += 2;
+    }
+
+    // بارش سالانه
+    if (annualPrecip) {
+        let s;
+        const a = annualPrecip.annualAvg;
+        if (a > 1000) s = 10;
+        else if (a > 700) s = 8;
+        else if (a > 500) s = 6;
+        else if (a > 300) s = 4;
+        else if (a > 150) s = 2;
+        else s = 1;
+        factors.push({ name: 'بارش سالانه', value: a.toFixed(0) + ' mm', score: s, weight: 3 });
+        totalScore += s * 3; weightSum += 3;
+    }
+
+    return {
+        score: weightSum > 0 ? totalScore / weightSum : 0,
+        factors: factors
+    };
+}
+
+// ============================================================
+// تحلیل اصلی
 // ============================================================
 async function analyzeMultiHazard() {
     hideError();
     const resultEl = document.getElementById('result');
     const loadingEl = document.getElementById('loading');
     const btn = document.getElementById('analyzeBtn');
-    const chartSection = document.getElementById('chartSection');
-    const barChartSection = document.getElementById('barChartSection');
 
     resultEl.classList.remove('show');
-    chartSection.style.display = 'none';
-    barChartSection.style.display = 'none';
-
     const lat = parseFloat(document.getElementById('lat').value);
     const lon = parseFloat(document.getElementById('lon').value);
 
@@ -450,89 +550,96 @@ async function analyzeMultiHazard() {
     loadingEl.style.display = 'block';
 
     try {
-        // دریافت داده‌های پایه
-        const [elevation, slopeData, precipData, annualPrecip] = await Promise.all([
+        // دریافت همه داده‌ها به صورت موازی
+        const [elevation, slopeData, annualPrecip, dischargeData, earthquakeData] = await Promise.all([
             getElevation(lat, lon),
             estimateSlope(lat, lon),
-            getPrecipitation(lat, lon),
-            getAnnualPrecipitation(lat, lon)
+            getAnnualPrecipitation(lat, lon),
+            getFloodDischarge(lat, lon),
+            getEarthquakeRisk(lat, lon)
         ]);
-
-        loadingEl.style.display = 'none';
 
         const slopePercent = slopeData ? slopeData.slopePercent : null;
 
-        // محاسبه ریسک هر مخاطره
-        const floodRisk = calculateFloodRisk(elevation, slopePercent, precipData, annualPrecip);
-        const earthquakeRisk = await calculateEarthquakeRisk(lat, lon);
-        const landslideRisk = calculateLandslideRisk(slopePercent, precipData, elevation);
+        // ارزیابی مخاطرات
+        const flood = calculateFloodRisk(elevation, slopePercent, annualPrecip, dischargeData);
+        const earthquake = earthquakeData || { score: 0, factors: [] };
+        const landslide = await getLandslideRisk(lat, lon, slopePercent, annualPrecip, elevation);
+        const lightning = await getLightningRisk(lat, lon, annualPrecip);
+        const subsidence = getSubsidenceRisk(lat, lon);
 
-        // محاسبه ریسک کلی (میانگین)
-        const overallScore = (floodRisk + earthquakeRisk + landslideRisk) / 3;
+        loadingEl.style.display = 'none';
 
-        // نمایش نتیجه
-        let overallLevel, overallClass;
-        if (overallScore >= 8) { overallLevel = '🔴 ریسک کلی: خیلی زیاد'; overallClass = 'very-high'; }
-        else if (overallScore >= 6) { overallLevel = '🟠 ریسک کلی: زیاد'; overallClass = 'high'; }
-        else if (overallScore >= 4) { overallLevel = '🟡 ریسک کلی: متوسط'; overallClass = 'medium'; }
-        else if (overallScore >= 2) { overallLevel = '🟢 ریسک کلی: کم'; overallClass = 'low'; }
-        else { overallLevel = '🟢 ریسک کلی: خیلی کم'; overallClass = 'very-low'; }
+        const scores = [flood.score, earthquake.score, landslide.score, lightning.score, subsidence.score];
+        const overallScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+
+        // سطح ریسک
+        let overallLevel;
+        if (overallScore >= 8) overallLevel = '🔴 ریسک کلی: خیلی زیاد';
+        else if (overallScore >= 6) overallLevel = '🟠 ریسک کلی: زیاد';
+        else if (overallScore >= 4) overallLevel = '🟡 ریسک کلی: متوسط';
+        else if (overallScore >= 2) overallLevel = '🟢 ریسک کلی: کم';
+        else overallLevel = '🟢 ریسک کلی: خیلی کم';
 
         document.getElementById('overallRisk').textContent = overallLevel;
-        document.getElementById('overallScore').innerHTML = `<strong>نمره کلی: ${overallScore.toFixed(2)} از ۱۰</strong>`;
+        document.getElementById('overallScore').innerHTML = '<strong>نمره کلی: ' + overallScore.toFixed(2) + ' از ۱۰</strong>';
 
-        // کارت‌های مخاطره
-        const getScoreClass = (score) => {
-            if (score >= 8) return 'very-high';
-            if (score >= 6) return 'high';
-            if (score >= 4) return 'medium';
-            return 'low';
-        };
+        // کارت‌ها
+        const getClass = (s) => s >= 8 ? 'very-high' : s >= 6 ? 'high' : s >= 4 ? 'medium' : 'low';
+        document.getElementById('hazardCards').innerHTML = 
+            '<div class="hazard-card"><h4>🌊 سیل</h4><div class="score ' + getClass(flood.score) + '">' + flood.score.toFixed(2) + '</div></div>' +
+            '<div class="hazard-card"><h4>🌍 زلزله</h4><div class="score ' + getClass(earthquake.score) + '">' + earthquake.score.toFixed(2) + '</div></div>' +
+            '<div class="hazard-card"><h4>⛰️ رانش</h4><div class="score ' + getClass(landslide.score) + '">' + landslide.score.toFixed(2) + '</div></div>' +
+            '<div class="hazard-card"><h4>⚡ صاعقه</h4><div class="score ' + getClass(lightning.score) + '">' + lightning.score.toFixed(2) + '</div></div>' +
+            '<div class="hazard-card"><h4>📉 فرونشست</h4><div class="score ' + getClass(subsidence.score) + '">' + subsidence.score.toFixed(2) + '</div></div>';
 
-        document.getElementById('hazardCards').innerHTML = `
-            <div class="hazard-card">
-                <h4>🌊 سیل</h4>
-                <div class="score ${getScoreClass(floodRisk)}">${floodRisk.toFixed(2)}</div>
-            </div>
-            <div class="hazard-card">
-                <h4>🌍 زلزله</h4>
-                <div class="score ${getScoreClass(earthquakeRisk)}">${earthquakeRisk.toFixed(2)}</div>
-            </div>
-            <div class="hazard-card">
-                <h4>⛰️ رانش زمین</h4>
-                <div class="score ${getScoreClass(landslideRisk)}">${landslideRisk.toFixed(2)}</div>
-            </div>
-        `;
+        // جزئیات پارامترها
+        const groups = [
+            { title: '🌊 سیل (GloFAS)', factors: flood.factors },
+            { title: '🌍 زلزله (USGS)', factors: earthquake.factors },
+            { title: '⛰️ رانش زمین', factors: landslide.factors },
+            { title: '⚡ صاعقه', factors: lightning.factors },
+            { title: '📉 فرونشست', factors: subsidence.factors }
+        ];
 
-        // رسم نمودار راداری
-        drawRadarChart([floodRisk, earthquakeRisk, landslideRisk]);
-        drawBarChart([floodRisk, earthquakeRisk, landslideRisk]);
+        let detailsHtml = '<h3>📋 جزئیات پارامترها</h3>';
+        groups.forEach(g => {
+            if (g.factors.length > 0) {
+                detailsHtml += '<h4 style="margin-top: 15px; color: #2d3748;">' + g.title + '</h4><ul>';
+                g.factors.forEach(f => {
+                    detailsHtml += '<li><strong>' + f.name + ':</strong> ' + f.value + ' (نمره: ' + f.score + '/10، وزن: ' + f.weight + ')</li>';
+                });
+                detailsHtml += '</ul>';
+            }
+        });
+        document.getElementById('paramDetails').innerHTML = detailsHtml;
+
+        // نمودارها
+        drawRadarChart(scores);
+        drawBarChart(scores);
 
         resultEl.classList.add('show');
-        chartSection.style.display = 'block';
-        barChartSection.style.display = 'block';
 
     } catch (e) {
         console.error(e);
         showError('خطا در تحلیل: ' + e.message);
-    } finally {
         loadingEl.style.display = 'none';
+    } finally {
         btn.disabled = false;
     }
 }
 
 // ============================================================
-// نمودار راداری
+// نمودارها
 // ============================================================
 function drawRadarChart(scores) {
     const ctx = document.getElementById('radarChart').getContext('2d');
-
     if (radarChart) radarChart.destroy();
 
     radarChart = new Chart(ctx, {
         type: 'radar',
         data: {
-            labels: ['سیل', 'زلزله', 'رانش زمین'],
+            labels: ['سیل', 'زلزله', 'رانش', 'صاعقه', 'فرونشست'],
             datasets: [{
                 label: 'نمره ریسک',
                 data: scores.map(s => parseFloat(s.toFixed(2))),
@@ -554,32 +661,21 @@ function drawRadarChart(scores) {
                     pointLabels: { font: { family: 'Tahoma', size: 13 } }
                 }
             },
-            plugins: {
-                legend: { display: false }
-            }
+            plugins: { legend: { display: false } }
         }
     });
 }
 
-// ============================================================
-// نمودار میله‌ای
-// ============================================================
 function drawBarChart(scores) {
     const ctx = document.getElementById('barChart').getContext('2d');
-
     if (barChart) barChart.destroy();
 
-    const colors = scores.map(s => {
-        if (s >= 8) return '#e53e3e';
-        if (s >= 6) return '#dd6b20';
-        if (s >= 4) return '#d69e2e';
-        return '#38a169';
-    });
+    const colors = scores.map(s => s >= 8 ? '#e53e3e' : s >= 6 ? '#dd6b20' : s >= 4 ? '#d69e2e' : '#38a169');
 
     barChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['سیل', 'زلزله', 'رانش زمین'],
+            labels: ['سیل', 'زلزله', 'رانش', 'صاعقه', 'فرونشست'],
             datasets: [{
                 label: 'نمره ریسک',
                 data: scores.map(s => parseFloat(s.toFixed(2))),
@@ -592,9 +688,7 @@ function drawBarChart(scores) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
-            },
+            plugins: { legend: { display: false } },
             scales: {
                 y: {
                     beginAtZero: true,
@@ -602,32 +696,16 @@ function drawBarChart(scores) {
                     title: { display: true, text: 'نمره ریسک', font: { family: 'Tahoma' } },
                     ticks: { font: { family: 'Tahoma' } }
                 },
-                x: {
-                    ticks: { font: { family: 'Tahoma', size: 13 } }
-                }
+                x: { ticks: { font: { family: 'Tahoma', size: 13 } } }
             }
         }
     });
 }
 
 // ============================================================
-// توابع کمکی
-// ============================================================
-function showError(msg) {
-    const el = document.getElementById('error');
-    el.textContent = msg;
-    el.style.display = 'block';
-    document.getElementById('loading').style.display = 'none';
-}
-
-function hideError() {
-    document.getElementById('error').style.display = 'none';
-}
-
-// ============================================================
-// راه‌اندازی اولیه
+// راه‌اندازی
 // ============================================================
 window.addEventListener('DOMContentLoaded', function() {
     initMap();
-    console.log('برنامه چندمخاطره‌ای راه‌اندازی شد 🚀');
+    console.log('🚀 برنامه چندمخاطره‌ای با داده‌های دقیق راه‌اندازی شد');
 });
