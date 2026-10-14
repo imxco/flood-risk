@@ -3,13 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ارزیابی چندمخاطره‌ای</title>
+    <title>ارزیابی یکپارچه چندمخاطره‌ای</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 </head>
 <body>
     <div class="container">
-        <h1>🌍 ارزیابی چندمخاطره‌ای</h1>
+        <h1>🌍 سامانه ارزیابی یکپارچه ریسک</h1>
+
+        <div class="token-section">
+            <h3>🔑 توکن NASA Earthdata (برای داده‌های NDVI و کاربری اراضی)</h3>
+            <input type="password" id="nasaToken" placeholder="توکن خود را وارد کنید">
+            <div class="token-status" id="tokenStatus"></div>
+            <button type="button" onclick="saveToken()" class="btn-secondary">ذخیره توکن</button>
+        </div>
 
         <div class="search-section">
             <h3>🔍 جستجو</h3>
@@ -39,7 +46,13 @@
             <input type="number" id="lon" step="0.0001" value="51.3890">
         </div>
 
-        <button id="analyzeBtn" onclick="analyzeMultiHazard()" class="btn-primary">تحلیل چندمخاطره‌ای</button>
+        <div class="form-group" id="manualRiverGroup" style="display: none;">
+            <label>📏 فاصله از نزدیک‌ترین رودخانه (متر) — اختیاری:</label>
+            <input type="number" id="manualRiverDistance" step="10" min="0" placeholder="مثال: 250">
+            <p class="note">اگر Overpass داده نداد، می‌توانید اینجا وارد کنید.</p>
+        </div>
+
+        <button id="analyzeBtn" onclick="analyzeAll()" class="btn-primary">تحلیل یکپارچه</button>
 
         <div class="loading" id="loading">⏳ در حال تحلیل...</div>
         <div class="error" id="error"></div>
@@ -49,7 +62,6 @@
             <div id="overallScore"></div>
 
             <div class="hazard-cards" id="hazardCards"></div>
-                        <div class="param-details" id="paramDetails"></div>
 
             <div class="chart-section">
                 <h3>📊 نمودار راداری ریسک‌ها</h3>
