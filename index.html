@@ -9,12 +9,12 @@
 </head>
 <body>
     <div class="container">
-        <h1>🌊 ارزیابی چندمخاطره‌ای</h1>
+        <h1>🌍 ارزیابی چندمخاطره‌ای</h1>
 
         <div class="search-section">
             <h3>🔍 جستجو</h3>
             <div class="search-row">
-                <input type="text" id="searchInput" placeholder="نام مکان یا شرکت را وارد کنید...">
+                <input type="text" id="searchInput" placeholder="نام مکان یا شرکت...">
                 <select id="searchType">
                     <option value="place">مکان</option>
                     <option value="company">شرکت</option>
@@ -30,13 +30,13 @@
         </div>
 
         <div class="form-group">
-            <label>عرض جغرافیایی (Latitude):</label>
-            <input type="number" id="lat" step="0.0001" placeholder="مثال: 35.6892" value="35.6892">
+            <label>عرض جغرافیایی:</label>
+            <input type="number" id="lat" step="0.0001" value="35.6892">
         </div>
 
         <div class="form-group">
-            <label>طول جغرافیایی (Longitude):</label>
-            <input type="number" id="lon" step="0.0001" placeholder="مثال: 51.3890" value="51.3890">
+            <label>طول جغرافیایی:</label>
+            <input type="number" id="lon" step="0.0001" value="51.3890">
         </div>
 
         <button id="analyzeBtn" onclick="analyzeMultiHazard()" class="btn-primary">تحلیل چندمخاطره‌ای</button>
@@ -50,19 +50,21 @@
 
             <div class="hazard-cards" id="hazardCards"></div>
 
-            <div class="chart-section" id="chartSection" style="display:none;">
+            <div class="chart-section">
                 <h3>📊 نمودار راداری ریسک‌ها</h3>
                 <div class="chart-container">
                     <canvas id="radarChart"></canvas>
                 </div>
             </div>
 
-            <div class="chart-section" id="barChartSection" style="display:none;">
+            <div class="chart-section">
                 <h3>📊 مقایسه ریسک‌ها</h3>
                 <div class="chart-container">
                     <canvas id="barChart"></canvas>
                 </div>
             </div>
+
+            <div class="param-details" id="paramDetails"></div>
         </div>
     </div>
 
