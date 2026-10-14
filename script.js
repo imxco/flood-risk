@@ -319,92 +319,140 @@ async function getFloodDischarge(lat, lon) {
 }
 
 // ============================================================
-// NDVI (NASA)
+// NDVI (NASA) - با پروکسی CORS
 // ============================================================
 async function getNDVI(lat, lon, token) {
     if (!token) return null;
-    const url = 'https://modis.ornl.gov/rst/api/v1/MOD13Q1/subset' +
+    
+    // URL اصلی NASA
+    const targetUrl = 'https://modis.ornl.gov/rst/api/v1/MOD13Q1/subset' +
         '?latitude=' + lat + '&longitude=' + lon +
         '&band=250m_16_days_NDVI' +
         '&startDate=A2023001&endDate=A2023096' +
         '&kmAboveBelow=1&kmLeftRight=1';
-    try {
-        const res = await fetch(url, {
-            headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
-        });
-        if (!res.ok) return null;
-        const data = await res.json();
-        if (!data.subset || data.subset.length === 0) return null;
-        const scale = parseFloat(data.scale) || 0.0001;
-        const values = [];
-        data.subset.forEach(item => {
-            const raw = item.value !== undefined ? item.value : item.data;
-            if (raw === undefined || raw === null) return;
-            const num = parseFloat(raw);
-            if (isNaN(num)) return;
-            const scaled = num * scale;
-            if (scaled >= -1 && scaled <= 1 && num !== -3000) values.push(scaled);
-        });
-        if (values.length === 0) return null;
-        return { avg: values.reduce((a, b) => a + b, 0) / values.length };
-    } catch (e) { return null; }
+    
+    // لیست پروکسی‌های CORS (به ترتیب اولویت)
+    const proxies = [
+        'https://corsproxy.io/?url=' + encodeURIComponent(targetUrl),
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl),
+        'https://cors-anywhere.herokuapp.com/' + targetUrl
+    ];
+    
+    for (const proxyUrl of proxies) {
+        try {
+            console.log('تلاش NDVI با پروکسی:', proxyUrl.substring(0, 60) + '...');
+            
+            const res = await fetch(proxyUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (!res.ok) {
+                console.warn('پروکسی خطا داد:', res.status);
+                continue;
+            }
+            
+            const data = await res.json();
+            
+            if (!data.subset || data.subset.length === 0) {
+                console.warn('subset خالی است');
+                continue;
+            }
+            
+            const scale = parseFloat(data.scale) || 0.0001;
+            const values = [];
+            
+            data.subset.forEach(item => {
+                const raw = item.value !== undefined ? item.value : item.data;
+                if (raw === undefined || raw === null) return;
+                const num = parseFloat(raw);
+                if (isNaN(num)) return;
+                const scaled = num * scale;
+                if (scaled >= -1 && scaled <= 1 && num !== -3000) values.push(scaled);
+            });
+            
+            if (values.length === 0) continue;
+            
+            console.log('✅ NDVI دریافت شد:', values.length, 'مقدار');
+            return { avg: values.reduce((a, b) => a + b, 0) / values.length };
+            
+        } catch (e) {
+            console.warn('خطای پروکسی:', e.message);
+            continue;
+        }
+    }
+    
+    console.error('❌ همه پروکسی‌ها خطا دادند');
+    return null;
 }
-
 // ============================================================
-// کاربری اراضی (NASA)
+// کاربری اراضی (NASA) - با پروکسی CORS
 // ============================================================
 async function getLandCover(lat, lon, token) {
     if (!token) return null;
-    const url = 'https://modis.ornl.gov/rst/api/v1/MCD12Q1/subset' +
+    
+    const targetUrl = 'https://modis.ornl.gov/rst/api/v1/MCD12Q1/subset' +
         '?latitude=' + lat + '&longitude=' + lon +
         '&band=LC_Type1' +
         '&startDate=A2022001&endDate=A2022365' +
         '&kmAboveBelow=1&kmLeftRight=1';
-    try {
-        const res = await fetch(url, {
-            headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
-        });
-        if (!res.ok) return null;
-        const data = await res.json();
-        if (!data.subset || data.subset.length === 0) return null;
-        const counts = {};
-        data.subset.forEach(item => {
-            const raw = item.value !== undefined ? item.value : item.data;
-            if (raw === undefined) return;
-            const code = parseInt(raw);
-            if (isNaN(code) || code === 255) return;
-            counts[code] = (counts[code] || 0) + 1;
-        });
-        let dominant = null, maxCount = 0;
-        for (const code in counts) {
-            if (counts[code] > maxCount) { maxCount = counts[code]; dominant = parseInt(code); }
+    
+    const proxies = [
+        'https://corsproxy.io/?url=' + encodeURIComponent(targetUrl),
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl),
+        'https://cors-anywhere.herokuapp.com/' + targetUrl
+    ];
+    
+    for (const proxyUrl of proxies) {
+        try {
+            console.log('تلاش LandCover با پروکسی');
+            
+            const res = await fetch(proxyUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (!res.ok) {
+                console.warn('پروکسی خطا داد:', res.status);
+                continue;
+            }
+            
+            const data = await res.json();
+            
+            if (!data.subset || data.subset.length === 0) continue;
+            
+            const counts = {};
+            data.subset.forEach(item => {
+                const raw = item.value !== undefined ? item.value : item.data;
+                if (raw === undefined) return;
+                const code = parseInt(raw);
+                if (isNaN(code) || code === 255) return;
+                counts[code] = (counts[code] || 0) + 1;
+            });
+            
+            let dominant = null, maxCount = 0;
+            for (const code in counts) {
+                if (counts[code] > maxCount) { maxCount = counts[code]; dominant = parseInt(code); }
+            }
+            
+            const info = getLandCoverInfo(dominant);
+            console.log('✅ کاربری اراضی:', info.name);
+            return { code: dominant, name: info.name, floodScore: info.floodScore };
+            
+        } catch (e) {
+            console.warn('خطای پروکسی:', e.message);
+            continue;
         }
-        const info = getLandCoverInfo(dominant);
-        return { code: dominant, name: info.name, floodScore: info.floodScore };
-    } catch (e) { return null; }
-}
-
-function getLandCoverInfo(code) {
-    const m = {
-        1:  { name: 'جنگل سوزنی‌برگ', floodScore: 1 },
-        2:  { name: 'جنگل پهن‌برگ', floodScore: 1 },
-        3:  { name: 'جنگل خزان‌کننده', floodScore: 2 },
-        4:  { name: 'جنگل پهن‌برگ خزان', floodScore: 2 },
-        5:  { name: 'جنگل مختلط', floodScore: 2 },
-        6:  { name: 'بیشه‌زار', floodScore: 4 },
-        7:  { name: 'بوته‌زار باز', floodScore: 5 },
-        8:  { name: 'ساوانای چوبی', floodScore: 5 },
-        9:  { name: 'ساوانا', floodScore: 6 },
-        10: { name: 'مرتع', floodScore: 6 },
-        11: { name: 'تالاب', floodScore: 9 },
-        12: { name: 'زمین زراعی', floodScore: 7 },
-        13: { name: 'زمین شهری', floodScore: 10 },
-        14: { name: 'زراعت/پوشش طبیعی', floodScore: 6 },
-        15: { name: 'برف و یخ', floodScore: 3 },
-        16: { name: 'زمین بایر', floodScore: 4 },
-        17: { name: 'پهنه آبی', floodScore: 10 }
-    };
-    return m[code] || { name: 'نامشخص', floodScore: 5 };
+    }
+    
+    console.error('❌ همه پروکسی‌ها خطا دادند');
+    return null;
 }
 
 // ============================================================
