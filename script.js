@@ -6,6 +6,9 @@ let marker = null;
 let radarChart = null;
 let barChart = null;
 
+// ⚠️ آدرس Worker شما
+const WORKER_URL = 'https://nasaproxy.behnam-zamani.workers.dev';
+
 const MONTH_NAMES_FA = [
     'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
     'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
@@ -228,18 +231,6 @@ async function getElevation(lat, lon) {
     return null;
 }
 
-async function getElevationBatch(points) {
-    const lats = points.map(p => p.lat).join(',');
-    const lons = points.map(p => p.lon).join(',');
-    const url = 'https://api.open-meteo.com/v1/elevation?latitude=' + lats + '&longitude=' + lons;
-    try {
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const data = await res.json();
-        return data.elevation;
-    } catch (e) { return null; }
-}
-
 async function getPrecipitation(lat, lon) {
     const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&daily=precipitation_sum&past_days=10&forecast_days=1&timezone=auto';
     try {
@@ -311,9 +302,21 @@ async function estimateSlope(lat, lon) {
         { lat: lat, lon: lon + delta },
         { lat: lat, lon: lon - delta }
     ];
-    const elevs = await Promise.all(points.map(p => getElevation(p.lat, p.lon)));
+    
+    // دریافت ارتفاع مرکز
     const centerElev = await getElevation(lat, lon);
-    if (centerElev === null || elevs.some(e => e === null)) return null;
+    if (centerElev === null) return null;
+    
+    // دریافت ارتفاع نقاط اطراف با تاخیر (برای جلوگیری از Rate Limit)
+    const elevs = [];
+    for (const p of points) {
+        const e = await getElevation(p.lat, p.lon);
+        elevs.push(e);
+        await new Promise(r => setTimeout(r, 1100)); // ۱.۱ ثانیه تاخیر
+    }
+    
+    if (elevs.some(e => e === null)) return null;
+    
     const dLat = delta * 111000;
     const dLon = delta * 111000 * Math.cos(lat * Math.PI / 180);
     const gradN = (elevs[0] - centerElev) / dLat;
@@ -344,24 +347,41 @@ async function getFloodDischarge(lat, lon) {
 }
 
 // ============================================================
-// NDVI (NASA - مستقیم)
+// NDVI (NASA) - از طریق Cloudflare Worker
 // ============================================================
 async function getNDVI(lat, lon, token) {
     if (!token) return null;
-    const url = 'https://modis.ornl.gov/rst/api/v1/MOD13Q1/subset' +
+    
+    const nasaUrl = 'https://modis.ornl.gov/rst/api/v1/MOD13Q1/subset' +
         '?latitude=' + lat + '&longitude=' + lon +
         '&band=250m_16_days_NDVI' +
         '&startDate=A2023001&endDate=A2023096' +
         '&kmAboveBelow=1&kmLeftRight=1';
+    
+    const url = WORKER_URL + '/?url=' + encodeURIComponent(nasaUrl);
+    
+    console.log('NDVI via Worker:', url);
+    
     try {
         const res = await fetch(url, {
-            headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
+            method: 'GET',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Accept': 'application/json'
+            }
         });
+        
+        console.log('NDVI Status:', res.status);
+        
         if (!res.ok) return null;
+        
         const data = await res.json();
+        
         if (!data.subset || data.subset.length === 0) return null;
+        
         const scale = parseFloat(data.scale) || 0.0001;
         const values = [];
+        
         data.subset.forEach(item => {
             const raw = item.value !== undefined ? item.value : item.data;
             if (raw === undefined || raw === null) return;
@@ -370,28 +390,53 @@ async function getNDVI(lat, lon, token) {
             const scaled = num * scale;
             if (scaled >= -1 && scaled <= 1 && num !== -3000) values.push(scaled);
         });
+        
         if (values.length === 0) return null;
-        return { avg: values.reduce((a, b) => a + b, 0) / values.length };
-    } catch (e) { return null; }
+        
+        const avg = values.reduce((a, b) => a + b, 0) / values.length;
+        console.log('✅ NDVI:', avg.toFixed(3));
+        
+        return { avg: avg };
+        
+    } catch (e) {
+        console.warn('NDVI error:', e);
+        return null;
+    }
 }
 
 // ============================================================
-// کاربری اراضی (NASA - مستقیم)
+// کاربری اراضی (NASA) - از طریق Cloudflare Worker
 // ============================================================
 async function getLandCover(lat, lon, token) {
     if (!token) return null;
-    const url = 'https://modis.ornl.gov/rst/api/v1/MCD12Q1/subset' +
+    
+    const nasaUrl = 'https://modis.ornl.gov/rst/api/v1/MCD12Q1/subset' +
         '?latitude=' + lat + '&longitude=' + lon +
         '&band=LC_Type1' +
         '&startDate=A2022001&endDate=A2022365' +
         '&kmAboveBelow=1&kmLeftRight=1';
+    
+    const url = WORKER_URL + '/?url=' + encodeURIComponent(nasaUrl);
+    
+    console.log('LandCover via Worker:', url);
+    
     try {
         const res = await fetch(url, {
-            headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
+            method: 'GET',
+            headers: {
+                'Authorization': 'Bearer ' + token,
+                'Accept': 'application/json'
+            }
         });
+        
+        console.log('LandCover Status:', res.status);
+        
         if (!res.ok) return null;
+        
         const data = await res.json();
+        
         if (!data.subset || data.subset.length === 0) return null;
+        
         const counts = {};
         data.subset.forEach(item => {
             const raw = item.value !== undefined ? item.value : item.data;
@@ -400,13 +445,24 @@ async function getLandCover(lat, lon, token) {
             if (isNaN(code) || code === 255) return;
             counts[code] = (counts[code] || 0) + 1;
         });
+        
         let dominant = null, maxCount = 0;
         for (const code in counts) {
-            if (counts[code] > maxCount) { maxCount = counts[code]; dominant = parseInt(code); }
+            if (counts[code] > maxCount) {
+                maxCount = counts[code];
+                dominant = parseInt(code);
+            }
         }
+        
         const info = getLandCoverInfo(dominant);
+        console.log('✅ کاربری اراضی:', info.name);
+        
         return { code: dominant, name: info.name, floodScore: info.floodScore };
-    } catch (e) { return null; }
+        
+    } catch (e) {
+        console.warn('LandCover error:', e);
+        return null;
+    }
 }
 
 function getLandCoverInfo(code) {
@@ -734,17 +790,14 @@ async function analyzeAll() {
 
         loadingEl.style.display = 'none';
 
-        // بررسی ارتفاع دستی
         let elevation = autoElevation;
         let elevationSource = 'خودکار';
         
         if (!isNaN(manualElevValue)) {
             elevation = manualElevValue;
             elevationSource = 'دستی';
-            console.log('✅ ارتفاع دستی:', elevation, 'متر');
         }
         
-        // نمایش فیلد دستی ارتفاع اگر غیرمنطقی بود
         const manualElevGroup = document.getElementById('manualElevationGroup');
         if (elevation === null || elevation > 5000 || elevation < -500) {
             manualElevGroup.style.display = 'block';
@@ -752,7 +805,6 @@ async function analyzeAll() {
             manualElevGroup.style.display = 'none';
         }
         
-        // نمایش فیلد دستی فاصله از رودخانه
         const manualGroup = document.getElementById('manualRiverGroup');
         if (!riverData || !riverData.found) {
             manualGroup.style.display = 'block';
@@ -892,5 +944,5 @@ function drawBarChart(scores) {
 window.addEventListener('DOMContentLoaded', function() {
     loadToken();
     initMap();
-    console.log('🚀 سامانه یکپارچه با OpenTopoData راه‌اندازی شد');
+    console.log('🚀 سامانه یکپارچه راه‌اندازی شد (Worker: ' + WORKER_URL + ')');
 });
