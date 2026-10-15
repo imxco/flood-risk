@@ -34,6 +34,7 @@ function initMap() {
         document.getElementById('lon').value = lon;
         updateMarker(parseFloat(lat), parseFloat(lon));
         document.getElementById('manualRiverDistance').value = '';
+        document.getElementById('manualElevation').value = '';
     });
 }
 
@@ -48,6 +49,7 @@ function updateMarker(lat, lon) {
         document.getElementById('lat').value = pos.lat.toFixed(4);
         document.getElementById('lon').value = pos.lng.toFixed(4);
         document.getElementById('manualRiverDistance').value = '';
+        document.getElementById('manualElevation').value = '';
     });
 }
 
@@ -190,16 +192,40 @@ function selectSearchResult(lat, lon) {
 }
 
 // ============================================================
-// داده‌های پایه
+// دریافت ارتفاع (OpenTopoData + Open-Meteo Fallback)
 // ============================================================
 async function getElevation(lat, lon) {
-    const url = 'https://api.open-meteo.com/v1/elevation?latitude=' + lat + '&longitude=' + lon;
+    // سرویس اول: OpenTopoData
+    const url = 'https://api.opentopodata.org/v1/srtm90m?locations=' + lat + ',' + lon;
     try {
         const res = await fetch(url);
-        if (!res.ok) return null;
-        const data = await res.json();
-        return data.elevation[0];
-    } catch (e) { return null; }
+        if (res.ok) {
+            const data = await res.json();
+            if (data.results && data.results[0] && data.results[0].elevation !== null) {
+                const elev = data.results[0].elevation;
+                console.log('✅ ارتفاع از OpenTopoData:', elev, 'متر');
+                return elev;
+            }
+        }
+    } catch (e) {
+        console.warn('OpenTopoData خطا:', e.message);
+    }
+    
+    // سرویس دوم: Open-Meteo
+    const fallbackUrl = 'https://api.open-meteo.com/v1/elevation?latitude=' + lat + '&longitude=' + lon;
+    try {
+        const res = await fetch(fallbackUrl);
+        if (res.ok) {
+            const data = await res.json();
+            const elev = data.elevation[0];
+            console.log('⚠️ ارتفاع از Open-Meteo (پشتیبان):', elev, 'متر');
+            return elev;
+        }
+    } catch (e) {
+        console.warn('Open-Meteo خطا:', e.message);
+    }
+    
+    return null;
 }
 
 async function getElevationBatch(points) {
@@ -256,7 +282,6 @@ async function getMonthlyPrecipitation(lat, lon) {
         });
         for (let m = 0; m < 12; m++) monthlyAvg[m] /= years.length;
 
-        // نگاشت به تقویم شمسی (تقریبی)
         const monthOrder = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1];
         const persianMonthly = monthOrder.map(m => monthlyAvg[m]);
 
@@ -319,140 +344,92 @@ async function getFloodDischarge(lat, lon) {
 }
 
 // ============================================================
-// NDVI (NASA) - با پروکسی CORS
+// NDVI (NASA - مستقیم)
 // ============================================================
 async function getNDVI(lat, lon, token) {
     if (!token) return null;
-    
-    // URL اصلی NASA
-    const targetUrl = 'https://modis.ornl.gov/rst/api/v1/MOD13Q1/subset' +
+    const url = 'https://modis.ornl.gov/rst/api/v1/MOD13Q1/subset' +
         '?latitude=' + lat + '&longitude=' + lon +
         '&band=250m_16_days_NDVI' +
         '&startDate=A2023001&endDate=A2023096' +
         '&kmAboveBelow=1&kmLeftRight=1';
-    
-    // لیست پروکسی‌های CORS (به ترتیب اولویت)
-    const proxies = [
-        'https://corsproxy.io/?url=' + encodeURIComponent(targetUrl),
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl),
-        'https://cors-anywhere.herokuapp.com/' + targetUrl
-    ];
-    
-    for (const proxyUrl of proxies) {
-        try {
-            console.log('تلاش NDVI با پروکسی:', proxyUrl.substring(0, 60) + '...');
-            
-            const res = await fetch(proxyUrl, {
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + token,
-                    'Accept': 'application/json'
-                }
-            });
-            
-            if (!res.ok) {
-                console.warn('پروکسی خطا داد:', res.status);
-                continue;
-            }
-            
-            const data = await res.json();
-            
-            if (!data.subset || data.subset.length === 0) {
-                console.warn('subset خالی است');
-                continue;
-            }
-            
-            const scale = parseFloat(data.scale) || 0.0001;
-            const values = [];
-            
-            data.subset.forEach(item => {
-                const raw = item.value !== undefined ? item.value : item.data;
-                if (raw === undefined || raw === null) return;
-                const num = parseFloat(raw);
-                if (isNaN(num)) return;
-                const scaled = num * scale;
-                if (scaled >= -1 && scaled <= 1 && num !== -3000) values.push(scaled);
-            });
-            
-            if (values.length === 0) continue;
-            
-            console.log('✅ NDVI دریافت شد:', values.length, 'مقدار');
-            return { avg: values.reduce((a, b) => a + b, 0) / values.length };
-            
-        } catch (e) {
-            console.warn('خطای پروکسی:', e.message);
-            continue;
-        }
-    }
-    
-    console.error('❌ همه پروکسی‌ها خطا دادند');
-    return null;
+    try {
+        const res = await fetch(url, {
+            headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data.subset || data.subset.length === 0) return null;
+        const scale = parseFloat(data.scale) || 0.0001;
+        const values = [];
+        data.subset.forEach(item => {
+            const raw = item.value !== undefined ? item.value : item.data;
+            if (raw === undefined || raw === null) return;
+            const num = parseFloat(raw);
+            if (isNaN(num)) return;
+            const scaled = num * scale;
+            if (scaled >= -1 && scaled <= 1 && num !== -3000) values.push(scaled);
+        });
+        if (values.length === 0) return null;
+        return { avg: values.reduce((a, b) => a + b, 0) / values.length };
+    } catch (e) { return null; }
 }
+
 // ============================================================
-// کاربری اراضی (NASA) - با پروکسی CORS
+// کاربری اراضی (NASA - مستقیم)
 // ============================================================
 async function getLandCover(lat, lon, token) {
     if (!token) return null;
-    
-    const targetUrl = 'https://modis.ornl.gov/rst/api/v1/MCD12Q1/subset' +
+    const url = 'https://modis.ornl.gov/rst/api/v1/MCD12Q1/subset' +
         '?latitude=' + lat + '&longitude=' + lon +
         '&band=LC_Type1' +
         '&startDate=A2022001&endDate=A2022365' +
         '&kmAboveBelow=1&kmLeftRight=1';
-    
-    const proxies = [
-        'https://corsproxy.io/?url=' + encodeURIComponent(targetUrl),
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl),
-        'https://cors-anywhere.herokuapp.com/' + targetUrl
-    ];
-    
-    for (const proxyUrl of proxies) {
-        try {
-            console.log('تلاش LandCover با پروکسی');
-            
-            const res = await fetch(proxyUrl, {
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + token,
-                    'Accept': 'application/json'
-                }
-            });
-            
-            if (!res.ok) {
-                console.warn('پروکسی خطا داد:', res.status);
-                continue;
-            }
-            
-            const data = await res.json();
-            
-            if (!data.subset || data.subset.length === 0) continue;
-            
-            const counts = {};
-            data.subset.forEach(item => {
-                const raw = item.value !== undefined ? item.value : item.data;
-                if (raw === undefined) return;
-                const code = parseInt(raw);
-                if (isNaN(code) || code === 255) return;
-                counts[code] = (counts[code] || 0) + 1;
-            });
-            
-            let dominant = null, maxCount = 0;
-            for (const code in counts) {
-                if (counts[code] > maxCount) { maxCount = counts[code]; dominant = parseInt(code); }
-            }
-            
-            const info = getLandCoverInfo(dominant);
-            console.log('✅ کاربری اراضی:', info.name);
-            return { code: dominant, name: info.name, floodScore: info.floodScore };
-            
-        } catch (e) {
-            console.warn('خطای پروکسی:', e.message);
-            continue;
+    try {
+        const res = await fetch(url, {
+            headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' }
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data.subset || data.subset.length === 0) return null;
+        const counts = {};
+        data.subset.forEach(item => {
+            const raw = item.value !== undefined ? item.value : item.data;
+            if (raw === undefined) return;
+            const code = parseInt(raw);
+            if (isNaN(code) || code === 255) return;
+            counts[code] = (counts[code] || 0) + 1;
+        });
+        let dominant = null, maxCount = 0;
+        for (const code in counts) {
+            if (counts[code] > maxCount) { maxCount = counts[code]; dominant = parseInt(code); }
         }
-    }
-    
-    console.error('❌ همه پروکسی‌ها خطا دادند');
-    return null;
+        const info = getLandCoverInfo(dominant);
+        return { code: dominant, name: info.name, floodScore: info.floodScore };
+    } catch (e) { return null; }
+}
+
+function getLandCoverInfo(code) {
+    const m = {
+        1:  { name: 'جنگل سوزنی‌برگ', floodScore: 1 },
+        2:  { name: 'جنگل پهن‌برگ', floodScore: 1 },
+        3:  { name: 'جنگل خزان‌کننده', floodScore: 2 },
+        4:  { name: 'جنگل پهن‌برگ خزان', floodScore: 2 },
+        5:  { name: 'جنگل مختلط', floodScore: 2 },
+        6:  { name: 'بیشه‌زار', floodScore: 4 },
+        7:  { name: 'بوته‌زار باز', floodScore: 5 },
+        8:  { name: 'ساوانای چوبی', floodScore: 5 },
+        9:  { name: 'ساوانا', floodScore: 6 },
+        10: { name: 'مرتع', floodScore: 6 },
+        11: { name: 'تالاب', floodScore: 9 },
+        12: { name: 'زمین زراعی', floodScore: 7 },
+        13: { name: 'زمین شهری', floodScore: 10 },
+        14: { name: 'زراعت/پوشش طبیعی', floodScore: 6 },
+        15: { name: 'برف و یخ', floodScore: 3 },
+        16: { name: 'زمین بایر', floodScore: 4 },
+        17: { name: 'پهنه آبی', floodScore: 10 }
+    };
+    return m[code] || { name: 'نامشخص', floodScore: 5 };
 }
 
 // ============================================================
@@ -528,7 +505,7 @@ async function getEarthquakeData(lat, lon) {
 // ============================================================
 // 🌊 ارزیابی سیل (۹ پارامتر)
 // ============================================================
-function calculateFloodRisk(elevation, slopePercent, annualPrecip, dischargeData, ndviData, landCoverData, riverData, recentPrecip, manualDistance) {
+function calculateFloodRisk(elevation, slopePercent, annualPrecip, dischargeData, ndviData, landCoverData, riverData, recentPrecip, manualDistance, elevationSource) {
     let totalScore = 0, weightSum = 0;
     const factors = [];
 
@@ -547,7 +524,8 @@ function calculateFloodRisk(elevation, slopePercent, annualPrecip, dischargeData
         let s;
         if (elevation < 200) s = 10; else if (elevation < 500) s = 8; else if (elevation < 1000) s = 6;
         else if (elevation < 1500) s = 4; else if (elevation < 2000) s = 2; else s = 1;
-        factors.push({ name: 'ارتفاع', value: elevation.toFixed(0) + ' متر', score: s, weight: 2 });
+        const elevText = elevation.toFixed(0) + ' متر' + (elevationSource && elevationSource !== 'خودکار' ? ' (' + elevationSource + ')' : '');
+        factors.push({ name: 'ارتفاع', value: elevText, score: s, weight: 2 });
         totalScore += s * 2; weightSum += 2;
     }
 
@@ -647,7 +625,6 @@ function calculateEarthquakeRisk(eqData, lat, lon) {
 
         score = Math.min(10, magScore * distFactor);
     } else {
-        // تخمین از موقعیت
         if (lat > 35 && lat < 37 && lon > 49 && lon < 54) { score = 8; factors.push({ name: 'نزدیکی به گسل البرز', value: 'بالا', score: 8, weight: 5 }); }
         else if (lat > 30 && lat < 35 && lon > 45 && lon < 52) { score = 7; factors.push({ name: 'نزدیکی به گسل زاگرس', value: 'بالا', score: 7, weight: 5 }); }
         else { score = 4; factors.push({ name: 'منطقه مرکزی', value: 'متوسط', score: 4, weight: 5 }); }
@@ -739,9 +716,11 @@ async function analyzeAll() {
     const token = getToken();
     const manualInput = document.getElementById('manualRiverDistance');
     const manualValue = manualInput ? parseFloat(manualInput.value) : NaN;
+    const manualElevInput = document.getElementById('manualElevation');
+    const manualElevValue = manualElevInput ? parseFloat(manualElevInput.value) : NaN;
 
     try {
-        const [elevation, slopeData, annualPrecip, dischargeData, ndviData, landCoverData, riverData, recentPrecip, eqData] = await Promise.all([
+        const [autoElevation, slopeData, annualPrecip, dischargeData, ndviData, landCoverData, riverData, recentPrecip, eqData] = await Promise.all([
             getElevation(lat, lon),
             estimateSlope(lat, lon),
             getMonthlyPrecipitation(lat, lon),
@@ -755,7 +734,25 @@ async function analyzeAll() {
 
         loadingEl.style.display = 'none';
 
-        // نمایش فیلد دستی اگر Overpass داده نداد
+        // بررسی ارتفاع دستی
+        let elevation = autoElevation;
+        let elevationSource = 'خودکار';
+        
+        if (!isNaN(manualElevValue)) {
+            elevation = manualElevValue;
+            elevationSource = 'دستی';
+            console.log('✅ ارتفاع دستی:', elevation, 'متر');
+        }
+        
+        // نمایش فیلد دستی ارتفاع اگر غیرمنطقی بود
+        const manualElevGroup = document.getElementById('manualElevationGroup');
+        if (elevation === null || elevation > 5000 || elevation < -500) {
+            manualElevGroup.style.display = 'block';
+        } else {
+            manualElevGroup.style.display = 'none';
+        }
+        
+        // نمایش فیلد دستی فاصله از رودخانه
         const manualGroup = document.getElementById('manualRiverGroup');
         if (!riverData || !riverData.found) {
             manualGroup.style.display = 'block';
@@ -765,8 +762,7 @@ async function analyzeAll() {
 
         const slopePercent = slopeData ? slopeData.slopePercent : null;
 
-        // ارزیابی‌ها
-        const flood = calculateFloodRisk(elevation, slopePercent, annualPrecip, dischargeData, ndviData, landCoverData, riverData, recentPrecip, manualValue);
+        const flood = calculateFloodRisk(elevation, slopePercent, annualPrecip, dischargeData, ndviData, landCoverData, riverData, recentPrecip, manualValue, elevationSource);
         const earthquake = calculateEarthquakeRisk(eqData, lat, lon);
         const landslide = calculateLandslideRisk(slopePercent, annualPrecip, elevation);
         const lightning = calculateLightningRisk(lat, lon, annualPrecip);
@@ -793,7 +789,6 @@ async function analyzeAll() {
             '<div class="hazard-card"><h4>⚡ صاعقه</h4><div class="score ' + getClass(lightning.score) + '">' + lightning.score.toFixed(2) + '</div></div>' +
             '<div class="hazard-card"><h4>📉 فرونشست</h4><div class="score ' + getClass(subsidence.score) + '">' + subsidence.score.toFixed(2) + '</div></div>';
 
-        // جزئیات
         const groups = [
             { title: '🌊 سیل (۹ پارامتر)', factors: flood.factors },
             { title: '🌍 زلزله (USGS)', factors: earthquake.factors },
@@ -897,5 +892,5 @@ function drawBarChart(scores) {
 window.addEventListener('DOMContentLoaded', function() {
     loadToken();
     initMap();
-    console.log('🚀 سامانه یکپارچه ارزیابی ریسک راه‌اندازی شد');
+    console.log('🚀 سامانه یکپارچه با OpenTopoData راه‌اندازی شد');
 });
