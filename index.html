@@ -52,6 +52,12 @@
             <p class="note">اگر Overpass داده نداد، می‌توانید اینجا وارد کنید.</p>
         </div>
 
+        <div class="form-group" id="manualElevationGroup" style="display: none;">
+            <label>🏔️ ارتفاع از سطح دریا (متر) — اختیاری:</label>
+            <input type="number" id="manualElevation" step="1" placeholder="مثال: -13 یا 1200">
+            <p class="note">اگر ارتفاع خودکار اشتباه بود، اینجا وارد کنید. مقدار منفی برای مناطق پست مجاز است.</p>
+        </div>
+
         <button id="analyzeBtn" onclick="analyzeAll()" class="btn-primary">تحلیل یکپارچه</button>
 
         <div class="loading" id="loading">⏳ در حال تحلیل...</div>
