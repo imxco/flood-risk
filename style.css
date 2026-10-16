@@ -28,6 +28,7 @@ h1 { color: #1a365d; margin-bottom: 20px; text-align: center; }
 .token-status.ok { color: #38a169; }
 .token-status.missing { color: #e53e3e; }
 
+/* ============ جستجوی هوشمند ============ */
 .search-section {
     background: #edf2f7;
     padding: 15px;
@@ -36,40 +37,117 @@ h1 { color: #1a365d; margin-bottom: 20px; text-align: center; }
 }
 .search-section h3 { font-size: 14px; color: #4a5568; margin-bottom: 10px; }
 
-.search-row { display: flex; gap: 8px; }
-.search-row input, .search-row select {
-    padding: 10px;
+.search-box {
+    position: relative;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 12px 15px;
     border: 2px solid #e2e8f0;
     border-radius: 8px;
     font-size: 15px;
+    font-family: inherit;
+    transition: border-color 0.2s;
 }
-.search-row input { flex: 1; }
-.search-row select { background: white; }
 
-.btn-search {
-    padding: 10px 20px;
-    background: #3182ce;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    width: auto;
-    margin-top: 0;
-    font-size: 15px;
+.search-box input:focus {
+    outline: none;
+    border-color: #3182ce;
+    box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
 }
-.btn-search:hover { background: #2c5282; }
 
-.search-results { margin-top: 10px; max-height: 200px; overflow-y: auto; }
-.search-result-item {
-    padding: 10px;
+.search-results {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
     background: white;
-    border-radius: 6px;
-    margin-bottom: 5px;
-    cursor: pointer;
-    font-size: 13px;
-    border-right: 3px solid #3182ce;
+    border: 1px solid #e2e8f0;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    display: none;
 }
-.search-result-item:hover { background: #e2e8f0; }
+
+.search-results.show {
+    display: block;
+}
+
+.search-result-item {
+    padding: 12px 15px;
+    cursor: pointer;
+    font-size: 14px;
+    border-bottom: 1px solid #f0f4f8;
+    transition: background 0.15s;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+.search-result-item:hover,
+.search-result-item.active {
+    background: #ebf8ff;
+}
+
+.search-result-item .icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.search-result-item .info {
+    flex: 1;
+    min-width: 0;
+}
+
+.search-result-item .name {
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 3px;
+}
+
+.search-result-item .address {
+    font-size: 12px;
+    color: #718096;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-result-item .coords {
+    font-size: 11px;
+    color: #a0aec0;
+    margin-top: 3px;
+}
+
+.search-loading {
+    padding: 12px 15px;
+    text-align: center;
+    color: #3182ce;
+    font-size: 13px;
+}
+
+.search-no-result {
+    padding: 12px 15px;
+    text-align: center;
+    color: #718096;
+    font-size: 13px;
+}
+
+.search-source {
+    font-size: 10px;
+    color: #a0aec0;
+    margin-right: 4px;
+}
+
+/* ============ بقیه استایل‌ها ============ */
 
 .form-group { margin-bottom: 15px; }
 label { display: block; margin-bottom: 5px; font-weight: 600; color: #2d3748; font-size: 15px; }
@@ -80,6 +158,7 @@ input {
     border: 2px solid #e2e8f0;
     border-radius: 8px;
     font-size: 16px;
+    font-family: inherit;
 }
 input:focus { outline: none; border-color: #3182ce; }
 
@@ -220,11 +299,15 @@ button {
     display: none;
 }
 
+.note {
+    font-size: 12px;
+    color: #718096;
+    margin-top: 8px;
+}
+
 @media (max-width: 768px) {
     .hazard-cards { grid-template-columns: repeat(2, 1fr); }
     .container { padding: 15px; }
     #map { height: 300px; }
     .chart-container { height: 280px; }
-    .search-row { flex-direction: column; }
-    .btn-search { width: 100%; }
 }
