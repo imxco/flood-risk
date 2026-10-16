@@ -12,23 +12,19 @@
         <h1>🌍 سامانه ارزیابی یکپارچه ریسک</h1>
 
         <div class="token-section">
-            <h3>🔑 توکن NASA Earthdata (برای داده‌های NDVI و کاربری اراضی)</h3>
+            <h3>🔑 توکن NASA Earthdata</h3>
             <input type="password" id="nasaToken" placeholder="توکن خود را وارد کنید">
             <div class="token-status" id="tokenStatus"></div>
             <button type="button" onclick="saveToken()" class="btn-secondary">ذخیره توکن</button>
         </div>
 
         <div class="search-section">
-            <h3>🔍 جستجو</h3>
-            <div class="search-row">
-                <input type="text" id="searchInput" placeholder="نام مکان یا شرکت...">
-                <select id="searchType">
-                    <option value="place">مکان</option>
-                    <option value="company">شرکت</option>
-                </select>
-                <button onclick="searchLocation()" class="btn-search">جستجو</button>
+            <h3>🔍 جستجو (مکان یا شرکت)</h3>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="نام مکان یا شرکت را تایپ کنید..." autocomplete="off">
+                <div id="searchResults" class="search-results"></div>
             </div>
-            <div id="searchResults" class="search-results"></div>
+            <p class="note">به محض تایپ، پیشنهادات نمایش داده می‌شوند.</p>
         </div>
 
         <div class="map-section">
@@ -55,7 +51,7 @@
         <div class="form-group" id="manualElevationGroup" style="display: none;">
             <label>🏔️ ارتفاع از سطح دریا (متر) — اختیاری:</label>
             <input type="number" id="manualElevation" step="1" placeholder="مثال: -13 یا 1200">
-            <p class="note">اگر ارتفاع خودکار اشتباه بود، اینجا وارد کنید. مقدار منفی برای مناطق پست مجاز است.</p>
+            <p class="note">اگر ارتفاع خودکار اشتباه بود، اینجا وارد کنید.</p>
         </div>
 
         <button id="analyzeBtn" onclick="analyzeAll()" class="btn-primary">تحلیل یکپارچه</button>
