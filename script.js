@@ -6,8 +6,8 @@ let marker = null;
 let radarChart = null;
 let barChart = null;
 
-// ⚠️ آدرس Worker شما
-const WORKER_URL = 'https://nasaproxy.behnam-zamani.workers.dev';
+// ⚠️ آدرس Worker جدید شما
+const WORKER_URL = 'https://nassaproxyv2.behnam-zamani.workers.dev';
 
 const MONTH_NAMES_FA = [
     'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
@@ -195,40 +195,19 @@ function selectSearchResult(lat, lon) {
 }
 
 // ============================================================
-// دریافت ارتفاع (OpenTopoData + Open-Meteo Fallback)
+// دریافت ارتفاع (Open-Meteo)
 // ============================================================
 async function getElevation(lat, lon) {
-    // سرویس اول: OpenTopoData
-    const url = 'https://api.opentopodata.org/v1/srtm90m?locations=' + lat + ',' + lon;
+    const url = 'https://api.open-meteo.com/v1/elevation?latitude=' + lat + '&longitude=' + lon;
     try {
         const res = await fetch(url);
-        if (res.ok) {
-            const data = await res.json();
-            if (data.results && data.results[0] && data.results[0].elevation !== null) {
-                const elev = data.results[0].elevation;
-                console.log('✅ ارتفاع از OpenTopoData:', elev, 'متر');
-                return elev;
-            }
-        }
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.elevation[0];
     } catch (e) {
-        console.warn('OpenTopoData خطا:', e.message);
+        console.warn('Elevation error:', e);
+        return null;
     }
-    
-    // سرویس دوم: Open-Meteo
-    const fallbackUrl = 'https://api.open-meteo.com/v1/elevation?latitude=' + lat + '&longitude=' + lon;
-    try {
-        const res = await fetch(fallbackUrl);
-        if (res.ok) {
-            const data = await res.json();
-            const elev = data.elevation[0];
-            console.log('⚠️ ارتفاع از Open-Meteo (پشتیبان):', elev, 'متر');
-            return elev;
-        }
-    } catch (e) {
-        console.warn('Open-Meteo خطا:', e.message);
-    }
-    
-    return null;
 }
 
 async function getPrecipitation(lat, lon) {
@@ -302,17 +281,13 @@ async function estimateSlope(lat, lon) {
         { lat: lat, lon: lon + delta },
         { lat: lat, lon: lon - delta }
     ];
-    
-    // دریافت ارتفاع مرکز
     const centerElev = await getElevation(lat, lon);
     if (centerElev === null) return null;
     
-    // دریافت ارتفاع نقاط اطراف با تاخیر (برای جلوگیری از Rate Limit)
     const elevs = [];
     for (const p of points) {
         const e = await getElevation(p.lat, p.lon);
         elevs.push(e);
-        await new Promise(r => setTimeout(r, 1100)); // ۱.۱ ثانیه تاخیر
     }
     
     if (elevs.some(e => e === null)) return null;
@@ -489,51 +464,10 @@ function getLandCoverInfo(code) {
 }
 
 // ============================================================
-// فاصله از رودخانه (Overpass)
+// فاصله از رودخانه (Overpass غیرفعال - فیلد دستی)
 // ============================================================
 async function getRiverDistance(lat, lon) {
-    const radius = 20000;
-    const query = '[out:json][timeout:30];(way["waterway"~"river|stream|canal|drain|ditch|wadi"](around:' + radius + ',' + lat + ',' + lon + '););out geom;';
-    const servers = [
-        'https://overpass.private.coffee/api/interpreter',
-        'https://overpass-api.de/api/interpreter',
-        'https://overpass.kumi.systems/api/interpreter'
-    ];
-    const headers = {
-        'Accept': 'application/json',
-        'User-Agent': 'MultiHazardApp/1.0',
-        'Referer': window.location.href
-    };
-    for (const server of servers) {
-        try {
-            const controller = new AbortController();
-            const tid = setTimeout(() => controller.abort(), 20000);
-            const res = await fetch(server + '?data=' + encodeURIComponent(query), {
-                method: 'GET', headers, signal: controller.signal
-            });
-            clearTimeout(tid);
-            if (!res.ok) continue;
-            const data = await res.json();
-            if (!data.elements || data.elements.length === 0) continue;
-            let minDist = Infinity, nearest = null;
-            data.elements.forEach(el => {
-                if (!el.geometry) return;
-                el.geometry.forEach(p => {
-                    const d = haversine(lat, lon, p.lat, p.lon);
-                    if (d < minDist) { minDist = d; nearest = el; }
-                });
-            });
-            if (!nearest) continue;
-            const tags = nearest.tags || {};
-            return {
-                distance: minDist,
-                distanceText: minDist < 1000 ? minDist.toFixed(0) + ' متر' : (minDist / 1000).toFixed(2) + ' کیلومتر',
-                name: tags.name || 'بدون نام',
-                type: tags.waterway || 'آبراهه',
-                found: true
-            };
-        } catch (e) { continue; }
-    }
+    console.log('ℹ️ Overpass غیرفعال است، فیلد دستی نمایش داده می‌شود');
     return { found: false, distanceText: 'بیش از ۲۰ کیلومتر' };
 }
 
