@@ -23,7 +23,6 @@ function initMap() {
 
     updateMarker(initialLat, initialLon);
 
-    // کلیک روی نقشه
     map.on('click', function(e) {
         const lat = e.latlng.lat.toFixed(4);
         const lon = e.latlng.lng.toFixed(4);
@@ -32,7 +31,6 @@ function initMap() {
         updateMarker(parseFloat(lat), parseFloat(lon));
     });
 
-    // 🌟 همگام‌سازی: وقتی کاربر مختصات را دستی وارد می‌کند، نشانگر روی نقشه حرکت کند
     document.getElementById('lat').addEventListener('change', syncMapWithInputs);
     document.getElementById('lon').addEventListener('change', syncMapWithInputs);
 }
@@ -93,7 +91,7 @@ function getToken() {
 }
 
 // ============================================================
-// جستجوی هوشمند (Autocomplete)
+// جستجوی هوشمند
 // ============================================================
 let searchTimeout = null;
 
@@ -190,7 +188,7 @@ function selectSearchResult(lat, lon) {
 }
 
 // ============================================================
-// دریافت داده‌های محیطی (کلیماتولوژی)
+// دریافت داده‌های محیطی
 // ============================================================
 async function getElevation(lat, lon) {
     try {
@@ -213,12 +211,11 @@ async function getPrecipitation(lat, lon) {
     } catch (e) { return null; }
 }
 
-// دریافت داده‌های جامع اقلیمی (بارش، دما، باد ۱۰ ساله)
 async function getClimateData(lat, lon) {
     const now = new Date();
     const endYear = now.getFullYear() - 1;
     const startYear = endYear - 9;
-    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startYear}-01-01&end_date=${endYear}-12-31&daily=precipitation_sum,temperature_2m_mean,wind_speed_10m_max&timezone=auto`;
+    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startYear}-01-01&end_date=${endYear}-12-31&daily=precipitation_sum,temperature_2m_mean,wind_speed_10m_mean&timezone=auto`;
     
     try {
         const res = await fetch(url);
@@ -228,7 +225,7 @@ async function getClimateData(lat, lon) {
         
         const precip = data.daily.precipitation_sum;
         const temp = data.daily.temperature_2m_mean;
-        const wind = data.daily.wind_speed_10m_max;
+        const wind = data.daily.wind_speed_10m_mean; 
         
         const monthlyPrecip = Array(12).fill(0);
         const monthlyTemp = Array(12).fill(0);
@@ -262,18 +259,16 @@ async function getClimateData(lat, lon) {
         const annualTempAvg = monthlyTemp.reduce((a,b)=>a+b,0) / 12;
 
         for(let m=0; m<12; m++) monthlyWind[m] /= years.length;
-        const annualWindAvg = monthlyWind.reduce((a,b)=>a+b,0) / 12;
-        const windiestMonthIndex = monthlyWind.indexOf(Math.max(...monthlyWind));
+        
+        const monthlyWindKmh = monthlyWind.map(w => w * 3.6);
+        const annualWindAvgKmh = monthlyWindKmh.reduce((a,b)=>a+b,0) / 12;
+        const windiestMonthIndex = monthlyWindKmh.indexOf(Math.max(...monthlyWindKmh));
 
         const monthOrder = [3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1, 2];
-        const persianPrecip = monthOrder.map(m => avgMonthlyPrecip[m]);
-        const persianTemp = monthOrder.map(m => monthlyTemp[m]);
-        const persianWind = monthOrder.map(m => monthlyWind[m]);
-
         return {
-            precip: { monthly: persianPrecip, annualAvg: annualPrecipAvg, pci: pci },
-            temp: { monthly: persianTemp, annualAvg: annualTempAvg },
-            wind: { monthly: persianWind, annualAvg: annualWindAvg, windiestMonth: MONTH_NAMES_FA[monthOrder.indexOf(windiestMonthIndex)] }
+            precip: { monthly: monthOrder.map(m=>avgMonthlyPrecip[m]), annualAvg: annualPrecipAvg, pci: pci },
+            temp: { monthly: monthOrder.map(m=>monthlyTemp[m]), annualAvg: annualTempAvg },
+            wind: { monthly: monthOrder.map(m=>monthlyWindKmh[m]), annualAvg: annualWindAvgKmh, windiestMonth: MONTH_NAMES_FA[monthOrder.indexOf(windiestMonthIndex)] }
         };
     } catch (e) { return null; }
 }
@@ -298,7 +293,7 @@ async function getVs30Estimate(slopePercent) {
 }
 
 // ============================================================
-// GloFAS (دبی)، NDVI، کاربری اراضی، فاصله از رودخانه
+// GloFAS، NDVI، کاربری اراضی، رودخانه
 // ============================================================
 async function getFloodDischarge(lat, lon) {
     const url = 'https://flood-api.open-meteo.com/v1/flood?latitude=' + lat + '&longitude=' + lon + '&daily=river_discharge,river_discharge_max&past_days=30&forecast_days=7&timezone=auto';
@@ -384,22 +379,35 @@ async function getRiverDistance(lat, lon) {
 }
 
 // ============================================================
-// زلزله
+// زلزله (با مرتب‌سازی ۱۰ زلزله اخیر)
 // ============================================================
 async function getEarthquakeData(lat, lon) {
     const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&latitude=${lat}&longitude=${lon}&maxradiuskm=150&minmagnitude=4.0&starttime=1900-01-01&limit=100`;
     let quakes = [];
     try { const res = await fetch(url); if (res.ok) quakes = (await res.json()).features || []; } catch(e) {}
+    
     let faultDistance = 50;
     if (lat > 35 && lat < 37 && lon > 49 && lon < 54) faultDistance = 12.5;
     else if (lat > 30 && lat < 35 && lon > 45 && lon < 52) faultDistance = 25.0;
+    
     let maxMag = 0, nearest = { dist: 9999, mag: 0 };
+    let recentQuakes = [];
+
     if (quakes.length > 0) {
-        const qData = quakes.map(q => ({ mag: q.properties.mag, dist: haversine(lat, lon, q.geometry.coordinates[1], q.geometry.coordinates[0]) / 1000 }));
+        const qData = quakes.map(q => ({
+            mag: q.properties.mag,
+            dist: haversine(lat, lon, q.geometry.coordinates[1], q.geometry.coordinates[0]) / 1000,
+            time: q.properties.time,
+            date: new Date(q.properties.time).toLocaleDateString('fa-IR')
+        }));
+        
         maxMag = Math.max(...qData.map(q=>q.mag));
         nearest = qData.reduce((min,q)=>q.dist<min.dist?q:min, qData[0]);
+        
+        qData.sort((a, b) => b.time - a.time);
+        recentQuakes = qData.slice(0, 10); 
     }
-    return { maxMag, nearest, faultDistance };
+    return { maxMag, nearest, faultDistance, recentQuakes };
 }
 
 function haversine(lat1, lon1, lat2, lon2) {
@@ -420,7 +428,7 @@ async function analyzeAll() {
     const token = getToken();
 
     try {
-        const [elevation, slopeData, climate, recentPrecip, discharge, ndvi, landCover, river, eqData] = await Promise.all([
+        const [autoElevation, slopeData, climate, recentPrecip, discharge, ndvi, landCover, river, eqData] = await Promise.all([
             getElevation(lat, lon),
             estimateSlope(lat, lon),
             getClimateData(lat, lon),
@@ -434,11 +442,15 @@ async function analyzeAll() {
 
         document.getElementById('loading').style.display = 'none';
         
+        if (autoElevation === null) {
+            alert("خطا در دریافت ارتفاع از سطح دریا از سرور");
+            return;
+        }
+        
         const slopePercent = slopeData ? slopeData.slopePercent : null;
         const vs30 = await getVs30Estimate(slopePercent);
 
-        // --- 1. محاسبه امتیازها (مقیاس ۱ تا ۵ برای هماهنگی با گزارش) ---
-        // سیل
+        // محاسبه امتیازها
         let fScore = 1;
         if (climate) {
             if (climate.precip.annualAvg > 700) fScore = 4;
@@ -450,16 +462,14 @@ async function analyzeAll() {
         if (river && river.found && river.distance < 500) fScore += 0.5;
         fScore = Math.min(5, fScore);
 
-        // زلزله
         let eScore = 1;
         if (eqData.maxMag >= 6) eScore = 4;
         else if (eqData.maxMag >= 5) eScore = 3;
         else if (eqData.maxMag >= 4) eScore = 2;
         if (eqData.faultDistance < 20) eScore += 0.5;
-        if (vs30 < 300) eScore += 0.5; // زمین نرم
+        if (vs30 < 300) eScore += 0.5;
         eScore = Math.min(5, eScore);
 
-        // رانش (بر اساس شیب و بارش)
         let landScore = 1;
         if (slopePercent) {
             if (slopePercent > 15) landScore = 4;
@@ -469,26 +479,22 @@ async function analyzeAll() {
         if (climate && climate.precip.annualAvg > 700) landScore += 0.5;
         landScore = Math.min(5, landScore);
 
-        // فرونشست (تخمینی)
         let subScore = 1;
         if (lat > 35 && lat < 36 && lon > 51 && lon < 52) subScore = 3.5; 
         else if (lat > 32 && lat < 36 && lon > 50 && lon < 55) subScore = 4.5; 
 
-        // صاعقه
         let lScore = 2;
         if (climate) {
             if (climate.precip.annualAvg > 700) lScore = 4;
             else if (climate.precip.annualAvg > 300) lScore = 3;
         }
 
-        // باد
         let wScore = 1;
         if (climate) {
-            if (climate.wind.annualAvg > 25) wScore = 4;
+            if (climate.wind.annualAvg > 30) wScore = 4;
             else if (climate.wind.annualAvg > 15) wScore = 2.5;
         }
 
-        // دما
         let tScore = 1.9;
         if (climate) {
             if (climate.temp.annualAvg > 25 || climate.temp.annualAvg < 5) tScore = 3;
@@ -497,7 +503,6 @@ async function analyzeAll() {
         const scores = [fScore, eScore, landScore, subScore, lScore, wScore, tScore];
         const overall = scores.reduce((a,b)=>a+b,0) / scores.length;
 
-        // --- 2. نمایش کارت‌ها ---
         document.getElementById('overallRisk').textContent = overall >= 4 ? '🔴 ریسک کلی: بالا' : overall >= 2.5 ? '🟡 ریسک کلی: متوسط' : '🟢 ریسک کلی: پایین';
         document.getElementById('overallScore').innerHTML = `<strong>نمره کلی: ${overall.toFixed(1)} از ۵</strong>`;
 
@@ -512,16 +517,14 @@ async function analyzeAll() {
             <div class="hazard-card"><h4>🌡️ دما</h4><div class="score ${getClass(tScore)}">${tScore.toFixed(1)}</div></div>
         `;
 
-        // --- 3. رسم نمودارها ---
-        drawRadarChart([fScore, eScore, landScore, subScore, lScore, wScore, tScore]);
-        drawBarChart([fScore, eScore, landScore, subScore, lScore, wScore, tScore]);
+        drawRadarChart(scores);
+        drawBarChart(scores);
         if (climate) {
             drawPrecipChart(climate.precip.monthly);
             drawWindChart(climate.wind.monthly);
             drawTempChart(climate.temp.monthly);
         }
 
-        // --- 4. جزئیات پارامترها ---
         let html = '<h3>📋 جزئیات تحلیل</h3>';
         html += `<h4>🌊 سیل</h4><ul>`;
         if (climate) html += `<li>بارش سالانه: ${climate.precip.annualAvg.toFixed(1)} mm</li><li>PCI: ${climate.precip.pci.toFixed(1)}</li>`;
@@ -532,15 +535,46 @@ async function analyzeAll() {
         if (recentPrecip) html += `<li>بارش ۱۰ روز اخیر: ${recentPrecip.avg.toFixed(2)} mm</li>`;
         html += `</ul>`;
 
-        html += `<h4>🌍 زلزله</h4><ul><li>فاصله تا گسل: ${eqData.faultDistance} km</li><li>بزرگ‌ترین زلزله: M${eqData.maxMag}</li><li>Vs30: ${vs30} m/s</li></ul>`;
+        html += `<h4>🌍 زلزله</h4>`;
+        html += `<ul>
+                    <li>فاصله تا گسل: ${eqData.faultDistance} km</li>
+                    <li>Vs30: ${vs30} m/s</li>
+                 </ul>`;
+                 
+        // جدول ۱۰ زلزله اخیر با هایلایت بزرگ‌ترین زلزله
+        if (eqData.recentQuakes.length > 0) {
+            const maxMagRecent = Math.max(...eqData.recentQuakes.map(q => q.mag));
+            html += `<table style="width:100%; border-collapse: collapse; margin-top: 10px; font-size: 13px;">
+                     <thead>
+                         <tr style="background-color: #edf2f7;">
+                             <th style="border: 1px solid #cbd5e0; padding: 5px;">تاریخ</th>
+                             <th style="border: 1px solid #cbd5e0; padding: 5px;">بزرگا (ریشتر)</th>
+                             <th style="border: 1px solid #cbd5e0; padding: 5px;">فاصله (km)</th>
+                         </tr>
+                     </thead>
+                     <tbody>`;
+            eqData.recentQuakes.forEach(q => {
+                const isMax = (q.mag === maxMagRecent);
+                const rowStyle = isMax ? 'background-color: #fed7d7; font-weight: bold; color: #c53030;' : '';
+                html += `<tr style="${rowStyle}">
+                            <td style="border: 1px solid #cbd5e0; padding: 5px; text-align: center;">${q.date}</td>
+                            <td style="border: 1px solid #cbd5e0; padding: 5px; text-align: center;">${q.mag.toFixed(1)}</td>
+                            <td style="border: 1px solid #cbd5e0; padding: 5px; text-align: center;">${q.dist.toFixed(1)}</td>
+                         </tr>`;
+            });
+            html += `</tbody></table>`;
+        }
+
+        html += `<h4>🏔️ توپوگرافی</h4><ul>
+                    <li>ارتفاع از سطح دریا: ${autoElevation.toFixed(0)} متر</li>
+                    <li>شیب تقریبی: ${slopePercent ? slopePercent.toFixed(1) : 'نامشخص'}%</li>
+                 </ul>`;
 
         if (climate) html += `<h4>🌡️ دما و باد</h4><ul><li>میانگین دما: ${climate.temp.annualAvg.toFixed(1)} C°</li><li>میانگین باد: ${climate.wind.annualAvg.toFixed(1)} km/h</li></ul>`;
 
         document.getElementById('paramDetails').innerHTML = html;
 
-        // --- 5. دستیار بیمه‌گر ---
         generateInsuranceAssistant(eScore, subScore, lScore, fScore, landScore, climate);
-
         document.getElementById('result').classList.add('show');
 
     } catch (e) {
