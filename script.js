@@ -211,11 +211,12 @@ async function getPrecipitation(lat, lon) {
     } catch (e) { return null; }
 }
 
+// 🌟 تابع اصلاح‌شده: دریافت مستقیم باد به کیلومتر بر ساعت
 async function getClimateData(lat, lon) {
     const now = new Date();
     const endYear = now.getFullYear() - 1;
     const startYear = endYear - 9;
-    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startYear}-01-01&end_date=${endYear}-12-31&daily=precipitation_sum,temperature_2m_mean,wind_speed_10m_mean&timezone=auto`;
+    const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startYear}-01-01&end_date=${endYear}-12-31&daily=precipitation_sum,temperature_2m_mean,wind_speed_10m_mean&wind_speed_unit=kmh&timezone=auto`;
     
     try {
         const res = await fetch(url);
@@ -260,15 +261,15 @@ async function getClimateData(lat, lon) {
 
         for(let m=0; m<12; m++) monthlyWind[m] /= years.length;
         
-        const monthlyWindKmh = monthlyWind.map(w => w * 3.6);
-        const annualWindAvgKmh = monthlyWindKmh.reduce((a,b)=>a+b,0) / 12;
-        const windiestMonthIndex = monthlyWindKmh.indexOf(Math.max(...monthlyWindKmh));
+        // نیازی به ضرب در ۳.۶ نیست چون واحد API کیلومتر بر ساعت است
+        const annualWindAvgKmh = monthlyWind.reduce((a,b)=>a+b,0) / 12;
+        const windiestMonthIndex = monthlyWind.indexOf(Math.max(...monthlyWind));
 
         const monthOrder = [3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1, 2];
         return {
             precip: { monthly: monthOrder.map(m=>avgMonthlyPrecip[m]), annualAvg: annualPrecipAvg, pci: pci },
             temp: { monthly: monthOrder.map(m=>monthlyTemp[m]), annualAvg: annualTempAvg },
-            wind: { monthly: monthOrder.map(m=>monthlyWindKmh[m]), annualAvg: annualWindAvgKmh, windiestMonth: MONTH_NAMES_FA[monthOrder.indexOf(windiestMonthIndex)] }
+            wind: { monthly: monthOrder.map(m=>monthlyWind[m]), annualAvg: annualWindAvgKmh, windiestMonth: MONTH_NAMES_FA[monthOrder.indexOf(windiestMonthIndex)] }
         };
     } catch (e) { return null; }
 }
@@ -541,7 +542,6 @@ async function analyzeAll() {
                     <li>Vs30: ${vs30} m/s</li>
                  </ul>`;
                  
-        // جدول ۱۰ زلزله اخیر با هایلایت بزرگ‌ترین زلزله
         if (eqData.recentQuakes.length > 0) {
             const maxMagRecent = Math.max(...eqData.recentQuakes.map(q => q.mag));
             html += `<table style="width:100%; border-collapse: collapse; margin-top: 10px; font-size: 13px;">
