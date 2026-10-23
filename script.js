@@ -211,7 +211,7 @@ async function getPrecipitation(lat, lon) {
     } catch (e) { return null; }
 }
 
-// دریافت مستقیم باد به کیلومتر بر ساعت
+// 🌟 تابع اصلاح‌شده و دقیق برای داده‌های اقلیمی
 async function getClimateData(lat, lon) {
     const now = new Date();
     const endYear = now.getFullYear() - 1;
@@ -256,21 +256,33 @@ async function getClimateData(lat, lon) {
         const sumSq = avgMonthlyPrecip.reduce((a, b) => a + b*b, 0);
         const pci = annualPrecipAvg > 0 ? (sumSq / (annualPrecipAvg * annualPrecipAvg)) * 100 : 0;
 
-        for(let m=0; m<12; m++) if(counts[m]>0) monthlyTemp[m] /= counts[m];
-        const annualTempAvg = monthlyTemp.reduce((a,b)=>a+b,0) / 12;
-
-        for(let m=0; m<12; m++) monthlyWind[m] /= years.length;
+        // محاسبه میانگین دقیق با تقسیم بر تعداد روزهای دارای داده
+        for(let m=0; m<12; m++) {
+            if(counts[m]>0) monthlyTemp[m] /= counts[m];
+        }
         
+        // برای باد، از آنجا که ممکن است روزهای بدون داده وجود داشته باشد،
+        // میانگین را بر اساس تعداد سال‌ها و روزهای همان ماه محاسبه می‌کنیم.
+        const avgDaysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        for(let m=0; m<12; m++) {
+            monthlyWind[m] /= (years.length * avgDaysInMonth[m]);
+        }
+
+        const annualTempAvg = monthlyTemp.reduce((a,b)=>a+b,0) / 12;
         const annualWindAvgKmh = monthlyWind.reduce((a,b)=>a+b,0) / 12;
         const windiestMonthIndex = monthlyWind.indexOf(Math.max(...monthlyWind));
 
-        const monthOrder = [3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1, 2];
+        // ترتیب شمسی
+        const monthOrder = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1];
         return {
             precip: { monthly: monthOrder.map(m=>avgMonthlyPrecip[m]), annualAvg: annualPrecipAvg, pci: pci },
             temp: { monthly: monthOrder.map(m=>monthlyTemp[m]), annualAvg: annualTempAvg },
             wind: { monthly: monthOrder.map(m=>monthlyWind[m]), annualAvg: annualWindAvgKmh, windiestMonth: MONTH_NAMES_FA[monthOrder.indexOf(windiestMonthIndex)] }
         };
-    } catch (e) { return null; }
+    } catch (e) { 
+        console.error("Climate API Error:", e);
+        return null; 
+    }
 }
 
 async function estimateSlope(lat, lon) {
@@ -379,7 +391,7 @@ async function getRiverDistance(lat, lon) {
 }
 
 // ============================================================
-// زلزله (با مرتب‌سازی ۱۰ زلزله اخیر)
+// زلزله
 // ============================================================
 async function getEarthquakeData(lat, lon) {
     const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&latitude=${lat}&longitude=${lon}&maxradiuskm=150&minmagnitude=4.0&starttime=1900-01-01&limit=100`;
@@ -527,14 +539,12 @@ async function analyzeAll() {
 
         let html = '<h3>📋 جزئیات تحلیل</h3>';
         
-        // بخش سیل
         html += `<h4>🌊 سیل</h4><ul>`;
         if (climate) html += `<li>بارش سالانه: ${climate.precip.annualAvg.toFixed(1)} mm</li><li>PCI: ${climate.precip.pci.toFixed(1)}</li>`;
         if (discharge) html += `<li>دبی GloFAS: ${discharge.current.toFixed(1)} m³/s</li>`;
         if (ndvi) html += `<li>NDVI: ${ndvi.avg.toFixed(3)}</li>`;
         if (landCover) html += `<li>کاربری اراضی: ${landCover.name}</li>`;
         
-        // 🌟 نمایش نام رودخانه و فاصله
         if (river && river.found) {
             const riverName = (river.name && river.name !== 'بدون نام') ? river.name : 'رودخانه بدون نام';
             html += `<li>فاصله از رودخانه: ${river.distanceText} (تا ${riverName})</li>`;
@@ -543,7 +553,6 @@ async function analyzeAll() {
         if (recentPrecip) html += `<li>بارش ۱۰ روز اخیر: ${recentPrecip.avg.toFixed(2)} mm</li>`;
         html += `</ul>`;
 
-        // بخش زلزله
         html += `<h4>🌍 زلزله</h4>`;
         html += `<ul>
                     <li>فاصله تا گسل: ${eqData.faultDistance} km</li>
@@ -573,13 +582,11 @@ async function analyzeAll() {
             html += `</tbody></table>`;
         }
 
-        // بخش توپوگرافی
         html += `<h4>🏔️ توپوگرافی</h4><ul>
                     <li>ارتفاع از سطح دریا: ${autoElevation.toFixed(0)} متر</li>
                     <li>شیب تقریبی: ${slopePercent ? slopePercent.toFixed(1) : 'نامشخص'}%</li>
                  </ul>`;
 
-        // بخش دما و باد
         if (climate) html += `<h4>🌡️ دما و باد</h4><ul><li>میانگین دما: ${climate.temp.annualAvg.toFixed(1)} C°</li><li>میانگین باد: ${climate.wind.annualAvg.toFixed(1)} km/h</li></ul>`;
 
         document.getElementById('paramDetails').innerHTML = html;
