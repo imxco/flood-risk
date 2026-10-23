@@ -211,7 +211,7 @@ async function getPrecipitation(lat, lon) {
     } catch (e) { return null; }
 }
 
-// 🌟 تابع اصلاح‌شده: دریافت مستقیم باد به کیلومتر بر ساعت
+// دریافت مستقیم باد به کیلومتر بر ساعت
 async function getClimateData(lat, lon) {
     const now = new Date();
     const endYear = now.getFullYear() - 1;
@@ -261,7 +261,6 @@ async function getClimateData(lat, lon) {
 
         for(let m=0; m<12; m++) monthlyWind[m] /= years.length;
         
-        // نیازی به ضرب در ۳.۶ نیست چون واحد API کیلومتر بر ساعت است
         const annualWindAvgKmh = monthlyWind.reduce((a,b)=>a+b,0) / 12;
         const windiestMonthIndex = monthlyWind.indexOf(Math.max(...monthlyWind));
 
@@ -527,15 +526,24 @@ async function analyzeAll() {
         }
 
         let html = '<h3>📋 جزئیات تحلیل</h3>';
+        
+        // بخش سیل
         html += `<h4>🌊 سیل</h4><ul>`;
         if (climate) html += `<li>بارش سالانه: ${climate.precip.annualAvg.toFixed(1)} mm</li><li>PCI: ${climate.precip.pci.toFixed(1)}</li>`;
         if (discharge) html += `<li>دبی GloFAS: ${discharge.current.toFixed(1)} m³/s</li>`;
         if (ndvi) html += `<li>NDVI: ${ndvi.avg.toFixed(3)}</li>`;
         if (landCover) html += `<li>کاربری اراضی: ${landCover.name}</li>`;
-        if (river.found) html += `<li>فاصله از رودخانه: ${river.distanceText}</li>`;
+        
+        // 🌟 نمایش نام رودخانه و فاصله
+        if (river && river.found) {
+            const riverName = (river.name && river.name !== 'بدون نام') ? river.name : 'رودخانه بدون نام';
+            html += `<li>فاصله از رودخانه: ${river.distanceText} (تا ${riverName})</li>`;
+        }
+        
         if (recentPrecip) html += `<li>بارش ۱۰ روز اخیر: ${recentPrecip.avg.toFixed(2)} mm</li>`;
         html += `</ul>`;
 
+        // بخش زلزله
         html += `<h4>🌍 زلزله</h4>`;
         html += `<ul>
                     <li>فاصله تا گسل: ${eqData.faultDistance} km</li>
@@ -565,11 +573,13 @@ async function analyzeAll() {
             html += `</tbody></table>`;
         }
 
+        // بخش توپوگرافی
         html += `<h4>🏔️ توپوگرافی</h4><ul>
                     <li>ارتفاع از سطح دریا: ${autoElevation.toFixed(0)} متر</li>
                     <li>شیب تقریبی: ${slopePercent ? slopePercent.toFixed(1) : 'نامشخص'}%</li>
                  </ul>`;
 
+        // بخش دما و باد
         if (climate) html += `<h4>🌡️ دما و باد</h4><ul><li>میانگین دما: ${climate.temp.annualAvg.toFixed(1)} C°</li><li>میانگین باد: ${climate.wind.annualAvg.toFixed(1)} km/h</li></ul>`;
 
         document.getElementById('paramDetails').innerHTML = html;
