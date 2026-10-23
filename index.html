@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ارزیابی یکپارچه چندمخاطره‌ای</title>
+    <title>سامانه ارزیابی ریسک و دستیار بیمه‌گر</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 </head>
 <body>
     <div class="container">
-        <h1>🌍 سامانه ارزیابی یکپارچه ریسک</h1>
+        <h1>🌍 سامانه ارزیابی ریسک و دستیار بیمه‌گر</h1>
 
         <div class="token-section">
             <h3>🔑 توکن NASA Earthdata</h3>
@@ -45,16 +45,14 @@
         <div class="form-group" id="manualRiverGroup" style="display: none;">
             <label>📏 فاصله از نزدیک‌ترین رودخانه (متر) — اختیاری:</label>
             <input type="number" id="manualRiverDistance" step="10" min="0" placeholder="مثال: 250">
-            <p class="note">اگر داده خودکار در دسترس نبود، می‌توانید اینجا وارد کنید.</p>
         </div>
 
         <div class="form-group" id="manualElevationGroup" style="display: none;">
             <label>🏔️ ارتفاع از سطح دریا (متر) — اختیاری:</label>
             <input type="number" id="manualElevation" step="1" placeholder="مثال: -13 یا 1200">
-            <p class="note">اگر ارتفاع خودکار اشتباه بود، اینجا وارد کنید.</p>
         </div>
 
-        <button id="analyzeBtn" onclick="analyzeAll()" class="btn-primary">تحلیل یکپارچه</button>
+        <button id="analyzeBtn" onclick="analyzeAll()" class="btn-primary">تحلیل یکپارچه و ارزیابی بیمه‌ای</button>
 
         <div class="loading" id="loading">⏳ در حال تحلیل...</div>
         <div class="error" id="error"></div>
@@ -63,7 +61,6 @@
             <h2 id="overallRisk"></h2>
             <div id="overallScore"></div>
             
-            <!-- دکمه دانلود PDF -->
             <div style="text-align: left; margin: 15px 0 25px 0;">
                 <button onclick="downloadPDF()" class="btn-primary" id="pdfBtn" style="width: auto; padding: 10px 20px; background: #e53e3e;">
                     📄 دانلود گزارش PDF
@@ -74,25 +71,41 @@
 
             <div class="chart-section">
                 <h3>📊 نمودار راداری ریسک‌ها</h3>
-                <div class="chart-container">
-                    <canvas id="radarChart"></canvas>
-                </div>
+                <div class="chart-container"><canvas id="radarChart"></canvas></div>
             </div>
 
             <div class="chart-section">
                 <h3>📊 مقایسه ریسک‌ها</h3>
-                <div class="chart-container">
-                    <canvas id="barChart"></canvas>
-                </div>
+                <div class="chart-container"><canvas id="barChart"></canvas></div>
+            </div>
+
+            <div class="chart-section">
+                <h3>🌧️ میانگین بارش ماهانه</h3>
+                <div class="chart-container"><canvas id="precipChart"></canvas></div>
+            </div>
+
+            <div class="chart-section">
+                <h3>💨 روند ماهانه باد</h3>
+                <div class="chart-container"><canvas id="windChart"></canvas></div>
+            </div>
+
+            <div class="chart-section">
+                <h3>🌡️ میانگین دمای ماهانه</h3>
+                <div class="chart-container"><canvas id="tempChart"></canvas></div>
             </div>
 
             <div class="param-details" id="paramDetails"></div>
+
+            <div class="insurance-assistant" id="insuranceAssistant" style="display:none; margin-top: 30px; border-top: 2px solid #ddd; padding-top: 20px;">
+                <h2 style="color: #2c5282;">📋 دستیار بیمه‌گر</h2>
+                <p>تحلیل و پیشنهادهای بیمه‌گری بر اساس مخاطرات با امتیاز بالاتر از ۲.۵</p>
+                <div id="insuranceContent"></div>
+            </div>
         </div>
     </div>
 
-    <!-- کتابخانه‌های مورد نیاز -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.3.0/turf.min.js"></script>
