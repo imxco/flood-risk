@@ -47,10 +47,7 @@
             <input type="number" id="manualRiverDistance" step="10" min="0" placeholder="مثال: 250">
         </div>
 
-        <div class="form-group" id="manualElevationGroup" style="display: none;">
-            <label>🏔️ ارتفاع از سطح دریا (متر) — اختیاری:</label>
-            <input type="number" id="manualElevation" step="1" placeholder="مثال: -13 یا 1200">
-        </div>
+        <!-- فیلد ارتفاع دستی کاملاً حذف شد تا اتوماتیک باشد -->
 
         <button id="analyzeBtn" onclick="analyzeAll()" class="btn-primary">تحلیل یکپارچه و ارزیابی بیمه‌ای</button>
 
@@ -62,7 +59,7 @@
             <div id="overallScore"></div>
             
             <div style="text-align: left; margin: 15px 0 25px 0;">
-                <button onclick="downloadPDF()" class="btn-primary" id="pdfBtn" style="width: auto; padding: 10px 20px; background: #e53e3e;">
+                <button onclick="downloadPDF()" class="btn-primary" id="pdfBtn" style="width: auto; padding: 20px; background: #e53e3e;">
                     📄 دانلود گزارش PDF
                 </button>
             </div>
