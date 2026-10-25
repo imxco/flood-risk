@@ -312,7 +312,10 @@ async function getFloodDischarge(lat, lon) {
             const discharge = data.daily.river_discharge.filter(v => v !== null);
             if (discharge.length === 0) continue;
             const current = discharge[discharge.length - 1];
-            if (current < 5 || current > 5000) continue;
+            
+            // 🌟 آستانه را به ۱ کاهش دادیم (قبلاً ۵ بود)
+            if (current < 1 || current > 5000) continue;
+            
             const avg = discharge.reduce((a, b) => a + b, 0) / discharge.length;
             const ratio = avg > 0 ? current / avg : 0;
             if (current > bestDischarge || bestDischarge === null) {
