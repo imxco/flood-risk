@@ -9,7 +9,7 @@ const MONTH_NAMES_FA = ['فروردین', 'اردیبهشت', 'خرداد', 'ت�
 let riverDataCache = null;
 
 // ============================================================
-// راه‌اندازی نقشه و همگام‌سازی مختصات
+// راه‌اندازی نقشه
 // ============================================================
 function initMap() {
     const initialLat = parseFloat(document.getElementById('lat').value) || 35.6892;
@@ -211,7 +211,6 @@ async function getPrecipitation(lat, lon) {
     } catch (e) { return null; }
 }
 
-// 🌟 تابع اصلاح‌شده و دقیق برای داده‌های اقلیمی
 async function getClimateData(lat, lon) {
     const now = new Date();
     const endYear = now.getFullYear() - 1;
@@ -256,33 +255,22 @@ async function getClimateData(lat, lon) {
         const sumSq = avgMonthlyPrecip.reduce((a, b) => a + b*b, 0);
         const pci = annualPrecipAvg > 0 ? (sumSq / (annualPrecipAvg * annualPrecipAvg)) * 100 : 0;
 
-        // محاسبه میانگین دقیق با تقسیم بر تعداد روزهای دارای داده
-        for(let m=0; m<12; m++) {
-            if(counts[m]>0) monthlyTemp[m] /= counts[m];
-        }
-        
-        // برای باد، از آنجا که ممکن است روزهای بدون داده وجود داشته باشد،
-        // میانگین را بر اساس تعداد سال‌ها و روزهای همان ماه محاسبه می‌کنیم.
-        const avgDaysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-        for(let m=0; m<12; m++) {
-            monthlyWind[m] /= (years.length * avgDaysInMonth[m]);
-        }
-
+        for(let m=0; m<12; m++) if(counts[m]>0) monthlyTemp[m] /= counts[m];
         const annualTempAvg = monthlyTemp.reduce((a,b)=>a+b,0) / 12;
+
+        const avgDaysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        for(let m=0; m<12; m++) monthlyWind[m] /= (years.length * avgDaysInMonth[m]);
+
         const annualWindAvgKmh = monthlyWind.reduce((a,b)=>a+b,0) / 12;
         const windiestMonthIndex = monthlyWind.indexOf(Math.max(...monthlyWind));
 
-        // ترتیب شمسی
         const monthOrder = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1];
         return {
             precip: { monthly: monthOrder.map(m=>avgMonthlyPrecip[m]), annualAvg: annualPrecipAvg, pci: pci },
             temp: { monthly: monthOrder.map(m=>monthlyTemp[m]), annualAvg: annualTempAvg },
             wind: { monthly: monthOrder.map(m=>monthlyWind[m]), annualAvg: annualWindAvgKmh, windiestMonth: MONTH_NAMES_FA[monthOrder.indexOf(windiestMonthIndex)] }
         };
-    } catch (e) { 
-        console.error("Climate API Error:", e);
-        return null; 
-    }
+    } catch (e) { return null; }
 }
 
 async function estimateSlope(lat, lon) {
@@ -305,56 +293,35 @@ async function getVs30Estimate(slopePercent) {
 }
 
 // ============================================================
-// GloFAS، NDVI، کاربری اراضی، رودخانه
+// GloFAS (با جستجوی اطراف)
 // ============================================================
 async function getFloodDischarge(lat, lon) {
-    // 🌟 به جای یک نقطه، ۵ نقطه مختلف (مرکز + ۴ جهت) را تست می‌کنیم
     const offsets = [
-        { lat: lat, lon: lon },           // مرکز
-        { lat: lat + 0.1, lon: lon },     // شمال
-        { lat: lat - 0.1, lon: lon },     // جنوب
-        { lat: lat, lon: lon + 0.1 },     // شرق
-        { lat: lat, lon: lon - 0.1 }      // غرب
+        { lat: lat, lon: lon }, { lat: lat + 0.1, lon: lon }, { lat: lat - 0.1, lon: lon },
+        { lat: lat, lon: lon + 0.1 }, { lat: lat, lon: lon - 0.1 }
     ];
-
-    let bestDischarge = null;
-    let bestRatio = 0;
+    let bestDischarge = null, bestRatio = 0;
 
     for (const point of offsets) {
         const url = `https://flood-api.open-meteo.com/v1/flood?latitude=${point.lat}&longitude=${point.lon}&daily=river_discharge,river_discharge_max&past_days=30&forecast_days=7&timezone=auto`;
-        
         try {
             const res = await fetch(url);
             if (!res.ok) continue;
-            
             const data = await res.json();
             if (!data.daily || !data.daily.river_discharge) continue;
-            
             const discharge = data.daily.river_discharge.filter(v => v !== null);
             if (discharge.length === 0) continue;
-            
             const current = discharge[discharge.length - 1];
-            
-            // فیلتر منطقی: دبی باید بین ۵ تا ۵۰۰۰ باشد
             if (current < 5 || current > 5000) continue;
-            
             const avg = discharge.reduce((a, b) => a + b, 0) / discharge.length;
             const ratio = avg > 0 ? current / avg : 0;
-            
-            // بهترین دبی (بزرگ‌ترین مقدار منطقی) را انتخاب کن
             if (current > bestDischarge || bestDischarge === null) {
                 bestDischarge = current;
                 bestRatio = ratio;
             }
-        } catch (e) {
-            continue;
-        }
+        } catch (e) { continue; }
     }
-
-    if (bestDischarge === null) {
-        return null; // هیچ داده منطقی پیدا نشد
-    }
-
+    if (bestDischarge === null) return null;
     return { current: bestDischarge, avg: bestDischarge / (bestRatio || 1), ratio: bestRatio };
 }
 
@@ -578,7 +545,13 @@ async function analyzeAll() {
         
         html += `<h4>🌊 سیل</h4><ul>`;
         if (climate) html += `<li>بارش سالانه: ${climate.precip.annualAvg.toFixed(1)} mm</li><li>PCI: ${climate.precip.pci.toFixed(1)}</li>`;
-        if (discharge) html += `<li>دبی GloFAS: ${discharge.current.toFixed(1)} m³/s</li>`;
+        
+        if (discharge) {
+            html += `<li>دبی GloFAS: ${discharge.current.toFixed(1)} m³/s</li>`;
+        } else {
+            html += `<li style="color: #dd6b20;">⚠️ داده دبی برای این نقطه معتبر نیست (مدل GloFAS خطا دارد).</li>`;
+        }
+        
         if (ndvi) html += `<li>NDVI: ${ndvi.avg.toFixed(3)}</li>`;
         if (landCover) html += `<li>کاربری اراضی: ${landCover.name}</li>`;
         
@@ -670,7 +643,7 @@ async function downloadPDF() {
     
     if (!resultEl.classList.contains('show')) return alert('ابتدا تحلیل را انجام دهید.');
     
-    // ۱. مخفی کردن کامل دکمه و نوارهای اضافی
+    // مخفی کردن دکمه در حین عکس‌برداری
     const originalBtnStyle = btn.style.display;
     btn.style.display = 'none';
     btn.disabled = true;
@@ -682,9 +655,8 @@ async function downloadPDF() {
         const pdfHeight = pdf.internal.pageSize.getHeight();
         const margin = 15;
         const contentWidth = pdfWidth - (margin * 2);
-        let currentY = 20; // شروع از 20 میلی‌متری بالا
+        let currentY = 20;
 
-        // افزودن هدر
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(18);
         pdf.text("Insurance Risk Assessment Report", pdfWidth / 2, 15, { align: "center" });
@@ -693,76 +665,42 @@ async function downloadPDF() {
         pdf.text("Generated by Multi-Hazard Risk Assessment System", pdfWidth / 2, 22, { align: "center" });
         currentY = 30;
 
-        // تابع کمکی برای گرفتن عکس از یک المان و اضافه کردن به PDF
         const addElementToPDF = async (element, title = null) => {
-            if (!element) return;
-            // اطمینان از اینکه المان قابل مشاهده است
-            if (element.offsetHeight === 0) return;
-
+            if (!element || element.offsetHeight === 0) return;
             const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
             const imgData = canvas.toDataURL('image/jpeg', 0.9);
-            
             const imgWidth = contentWidth;
             const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-            // اگر ارتفاع عکس از فضای باقی‌مانده بیشتر بود، صفحه جدید بساز
             if (currentY + imgHeight + 10 > pdfHeight - margin) {
                 pdf.addPage();
                 currentY = margin;
             }
-
-            // اگر عنوان داشت، چاپ کن
             if (title) {
                 pdf.setFont("helvetica", "bold");
                 pdf.setFontSize(12);
                 pdf.text(title, margin, currentY);
                 currentY += 6;
             }
-
             pdf.addImage(imgData, 'JPEG', margin, currentY, imgWidth, imgHeight);
-            currentY += imgHeight + 10; // فاصله بعد از هر المان
+            currentY += imgHeight + 10;
         };
 
-        // --- 1. کارت‌های ریسک ---
-        const hazardCards = document.getElementById('hazardCards');
-        await addElementToPDF(hazardCards, "Risk Score Summary");
+        await addElementToPDF(document.getElementById('hazardCards'), "Risk Score Summary");
+        await addElementToPDF(document.getElementById('radarChart').closest('.chart-section'), "Radar Chart");
+        await addElementToPDF(document.getElementById('barChart').closest('.chart-section'), "Comparison Chart");
+        await addElementToPDF(document.getElementById('precipChart').closest('.chart-section'), "Monthly Precipitation");
+        await addElementToPDF(document.getElementById('windChart').closest('.chart-section'), "Monthly Wind Speed");
+        await addElementToPDF(document.getElementById('tempChart').closest('.chart-section'), "Monthly Temperature");
+        await addElementToPDF(document.getElementById('paramDetails'), "Analysis Details");
+        await addElementToPDF(document.getElementById('insuranceAssistant'), "Insurance Assistant Recommendations");
 
-        // --- 2. نمودار راداری ---
-        const radarSection = document.getElementById('radarChart').closest('.chart-section');
-        await addElementToPDF(radarSection, "Radar Chart");
-
-        // --- 3. نمودار میله‌ای ---
-        const barSection = document.getElementById('barChart').closest('.chart-section');
-        await addElementToPDF(barSection, "Comparison Chart");
-
-        // --- 4. نمودار بارش ---
-        const precipSection = document.getElementById('precipChart').closest('.chart-section');
-        await addElementToPDF(precipSection, "Monthly Precipitation");
-
-        // --- 5. نمودار باد ---
-        const windSection = document.getElementById('windChart').closest('.chart-section');
-        await addElementToPDF(windSection, "Monthly Wind Speed");
-
-        // --- 6. نمودار دما ---
-        const tempSection = document.getElementById('tempChart').closest('.chart-section');
-        await addElementToPDF(tempSection, "Monthly Temperature");
-
-        // --- 7. جزئیات پارامترها ---
-        const paramDetails = document.getElementById('paramDetails');
-        await addElementToPDF(paramDetails, "Analysis Details");
-
-        // --- 8. دستیار بیمه‌گر ---
-        const insuranceAssistant = document.getElementById('insuranceAssistant');
-        await addElementToPDF(insuranceAssistant, "Insurance Assistant Recommendations");
-
-        // ۹. ذخیره فایل
         pdf.save('Insurance-Risk-Report.pdf');
 
     } catch (error) {
         console.error('PDF Error:', error);
         alert('خطا در تولید PDF. لطفاً دوباره تلاش کنید.');
     } finally {
-        // برگرداندن دکمه به حالت اول
         btn.style.display = originalBtnStyle;
         btn.disabled = false;
     }
