@@ -7,6 +7,7 @@ let radarChart = null, barChart = null, precipChart = null, windChart = null, te
 const WORKER_URL = 'https://nassaproxyv2.behnam-zamani.workers.dev';
 const MONTH_NAMES_FA = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
 let riverDataCache = null;
+let subsidenceDataCache = null; // کش برای داده فرونشست
 
 // ============================================================
 // راه‌اندازی نقشه
@@ -313,7 +314,6 @@ async function getFloodDischarge(lat, lon) {
             if (discharge.length === 0) continue;
             const current = discharge[discharge.length - 1];
             
-            // 🌟 آستانه را به ۱ کاهش دادیم (قبلاً ۵ بود)
             if (current < 1 || current > 5000) continue;
             
             const avg = discharge.reduce((a, b) => a + b, 0) / discharge.length;
@@ -398,6 +398,64 @@ async function getRiverDistance(lat, lon) {
 }
 
 // ============================================================
+// 📉 فرونشست (از GeoJSON)
+// ============================================================
+async function loadSubsidenceData() {
+    if (subsidenceDataCache) return subsidenceDataCache;
+    try {
+        const res = await fetch('iran-subsidence.geojson'); // نام فایل خود را اینجا بگذارید
+        if (!res.ok) {
+            console.warn('فایل فرونشست یافت نشد.');
+            return null;
+        }
+        subsidenceDataCache = await res.json();
+        console.log('✅ دیتابیس فرونشست بارگذاری شد:', subsidenceDataCache.features ? subsidenceDataCache.features.length : 0, 'نقطه');
+        return subsidenceDataCache;
+    } catch (e) {
+        console.warn('خطا در بارگذاری فرونشست:', e);
+        return null;
+    }
+}
+
+async function getSubsidenceData(lat, lon) {
+    const data = await loadSubsidenceData();
+    if (!data || !data.features) return null;
+
+    const userPoint = turf.point([lon, lat]);
+    let minDistance = Infinity;
+    let nearestFeature = null;
+
+    data.features.forEach(feature => {
+        if (!feature.geometry || feature.geometry.type !== 'Point') return;
+        const dist = turf.distance(userPoint, feature, { units: 'kilometers' });
+        if (dist < minDistance) {
+            minDistance = dist;
+            nearestFeature = feature;
+        }
+    });
+
+    if (!nearestFeature) return null;
+
+    const props = nearestFeature.properties;
+    let rate = null;
+    
+    for (const key in props) {
+        if (key.includes('SAMPLE') || key.includes('VALUE')) {
+            rate = parseFloat(props[key]);
+            break;
+        }
+    }
+
+    if (rate === null || isNaN(rate)) return null;
+
+    return {
+        rate: rate,
+        distance: minDistance,
+        found: true
+    };
+}
+
+// ============================================================
 // زلزله
 // ============================================================
 async function getEarthquakeData(lat, lon) {
@@ -447,7 +505,7 @@ async function analyzeAll() {
     const token = getToken();
 
     try {
-        const [autoElevation, slopeData, climate, recentPrecip, discharge, ndvi, landCover, river, eqData] = await Promise.all([
+        const [autoElevation, slopeData, climate, recentPrecip, discharge, ndvi, landCover, river, eqData, subsidenceData] = await Promise.all([
             getElevation(lat, lon),
             estimateSlope(lat, lon),
             getClimateData(lat, lon),
@@ -456,7 +514,8 @@ async function analyzeAll() {
             getNDVI(lat, lon, token),
             getLandCover(lat, lon, token),
             getRiverDistance(lat, lon),
-            getEarthquakeData(lat, lon)
+            getEarthquakeData(lat, lon),
+            getSubsidenceData(lat, lon)
         ]);
 
         document.getElementById('loading').style.display = 'none';
@@ -498,9 +557,23 @@ async function analyzeAll() {
         if (climate && climate.precip.annualAvg > 700) landScore += 0.5;
         landScore = Math.min(5, landScore);
 
+        // محاسبه امتیاز فرونشست
         let subScore = 1;
-        if (lat > 35 && lat < 36 && lon > 51 && lon < 52) subScore = 3.5; 
-        else if (lat > 32 && lat < 36 && lon > 50 && lon < 55) subScore = 4.5; 
+        let subsidenceText = '';
+        
+        if (subsidenceData && subsidenceData.found) {
+            const absRate = Math.abs(subsidenceData.rate);
+            if (absRate > 20) subScore = 5;
+            else if (absRate > 10) subScore = 4;
+            else if (absRate > 5) subScore = 3;
+            else if (absRate > 2) subScore = 2;
+            else subScore = 1;
+            subsidenceText = `نرخ فرونشست: ${absRate.toFixed(1)} سانتی‌متر در سال (فاصله تا نزدیک‌ترین ایستگاه: ${subsidenceData.distance.toFixed(1)} کیلومتر)`;
+        } else {
+            if (lat > 35 && lat < 36 && lon > 51 && lon < 52) subScore = 3.5; 
+            else if (lat > 32 && lat < 36 && lon > 50 && lon < 55) subScore = 4.5; 
+            subsidenceText = 'داده دقیق فرونشست در دسترس نیست (تخمین بر اساس منطقه).';
+        }
 
         let lScore = 2;
         if (climate) {
@@ -552,7 +625,12 @@ async function analyzeAll() {
         if (discharge) {
             html += `<li>دبی GloFAS: ${discharge.current.toFixed(1)} m³/s</li>`;
         } else {
-            html += `<li style="color: #dd6b20;">⚠️ داده دبی برای این نقطه معتبر نیست (مدل GloFAS خطا دارد).</li>`;
+            let fallbackMsg = `⚠️ داده دبی GloFAS برای این نقطه معتبر نیست.`;
+            if (river && river.found && river.distance < 1000) {
+                const riverName = (river.name && river.name !== 'بدون نام') ? river.name : 'رودخانه';
+                fallbackMsg += ` با توجه به فاصله بسیار کم تا ${riverName} (${river.distanceText})، ریسک سیل بالا است. لطفاً از داده‌های ایستگاه هیدرومتری محلی استفاده کنید.`;
+            }
+            html += `<li style="color: #dd6b20;">${fallbackMsg}</li>`;
         }
         
         if (ndvi) html += `<li>NDVI: ${ndvi.avg.toFixed(3)}</li>`;
@@ -600,6 +678,8 @@ async function analyzeAll() {
                     <li>شیب تقریبی: ${slopePercent ? slopePercent.toFixed(1) : 'نامشخص'}%</li>
                  </ul>`;
 
+        html += `<h4>📉 فرونشست زمین</h4><ul><li>${subsidenceText}</li></ul>`;
+
         if (climate) html += `<h4>🌡️ دما و باد</h4><ul><li>میانگین دما: ${climate.temp.annualAvg.toFixed(1)} C°</li><li>میانگین باد: ${climate.wind.annualAvg.toFixed(1)} km/h</li></ul>`;
 
         document.getElementById('paramDetails').innerHTML = html;
@@ -646,7 +726,6 @@ async function downloadPDF() {
     
     if (!resultEl.classList.contains('show')) return alert('ابتدا تحلیل را انجام دهید.');
     
-    // مخفی کردن دکمه در حین عکس‌برداری
     const originalBtnStyle = btn.style.display;
     btn.style.display = 'none';
     btn.disabled = true;
