@@ -308,17 +308,54 @@ async function getVs30Estimate(slopePercent) {
 // GloFAS، NDVI، کاربری اراضی، رودخانه
 // ============================================================
 async function getFloodDischarge(lat, lon) {
-    const url = 'https://flood-api.open-meteo.com/v1/flood?latitude=' + lat + '&longitude=' + lon + '&daily=river_discharge,river_discharge_max&past_days=30&forecast_days=7&timezone=auto';
-    try {
-        const res = await fetch(url);
-        if (!res.ok) return null;
-        const data = await res.json();
-        const discharge = data.daily.river_discharge.filter(v => v !== null);
-        if (discharge.length === 0) return null;
-        const current = discharge[discharge.length - 1];
-        const avg = discharge.reduce((a, b) => a + b, 0) / discharge.length;
-        return { current, avg, ratio: avg > 0 ? current / avg : 0 };
-    } catch (e) { return null; }
+    // 🌟 به جای یک نقطه، ۵ نقطه مختلف (مرکز + ۴ جهت) را تست می‌کنیم
+    const offsets = [
+        { lat: lat, lon: lon },           // مرکز
+        { lat: lat + 0.1, lon: lon },     // شمال
+        { lat: lat - 0.1, lon: lon },     // جنوب
+        { lat: lat, lon: lon + 0.1 },     // شرق
+        { lat: lat, lon: lon - 0.1 }      // غرب
+    ];
+
+    let bestDischarge = null;
+    let bestRatio = 0;
+
+    for (const point of offsets) {
+        const url = `https://flood-api.open-meteo.com/v1/flood?latitude=${point.lat}&longitude=${point.lon}&daily=river_discharge,river_discharge_max&past_days=30&forecast_days=7&timezone=auto`;
+        
+        try {
+            const res = await fetch(url);
+            if (!res.ok) continue;
+            
+            const data = await res.json();
+            if (!data.daily || !data.daily.river_discharge) continue;
+            
+            const discharge = data.daily.river_discharge.filter(v => v !== null);
+            if (discharge.length === 0) continue;
+            
+            const current = discharge[discharge.length - 1];
+            
+            // فیلتر منطقی: دبی باید بین ۵ تا ۵۰۰۰ باشد
+            if (current < 5 || current > 5000) continue;
+            
+            const avg = discharge.reduce((a, b) => a + b, 0) / discharge.length;
+            const ratio = avg > 0 ? current / avg : 0;
+            
+            // بهترین دبی (بزرگ‌ترین مقدار منطقی) را انتخاب کن
+            if (current > bestDischarge || bestDischarge === null) {
+                bestDischarge = current;
+                bestRatio = ratio;
+            }
+        } catch (e) {
+            continue;
+        }
+    }
+
+    if (bestDischarge === null) {
+        return null; // هیچ داده منطقی پیدا نشد
+    }
+
+    return { current: bestDischarge, avg: bestDischarge / (bestRatio || 1), ratio: bestRatio };
 }
 
 async function getNDVI(lat, lon, token) {
