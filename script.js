@@ -7,7 +7,7 @@ let radarChart = null, barChart = null, precipChart = null, windChart = null, te
 const WORKER_URL = 'https://nassaproxyv2.behnam-zamani.workers.dev';
 const MONTH_NAMES_FA = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
 let riverDataCache = null;
-let subsidenceDataCache = null; // کش برای داده فرونشست
+let subsidenceDataCache = null;
 
 // ============================================================
 // راه‌اندازی نقشه
@@ -398,12 +398,12 @@ async function getRiverDistance(lat, lon) {
 }
 
 // ============================================================
-// 📉 فرونشست (از GeoJSON)
+// 📉 فرونشست (از GeoJSON با شعاع جستجو)
 // ============================================================
 async function loadSubsidenceData() {
     if (subsidenceDataCache) return subsidenceDataCache;
     try {
-        const res = await fetch('iran-subsidence.geojson'); // نام فایل خود را اینجا بگذارید
+        const res = await fetch('iran-subsidence.geojson');
         if (!res.ok) {
             console.warn('فایل فرونشست یافت نشد.');
             return null;
@@ -424,21 +424,23 @@ async function getSubsidenceData(lat, lon) {
     const userPoint = turf.point([lon, lat]);
     let minDistance = Infinity;
     let nearestFeature = null;
+    const searchRadius = 30; // شعاع ۳۰ کیلومتری برای جستجو
 
     data.features.forEach(feature => {
         if (!feature.geometry || feature.geometry.type !== 'Point') return;
         const dist = turf.distance(userPoint, feature, { units: 'kilometers' });
-        if (dist < minDistance) {
+        if (dist <= searchRadius && dist < minDistance) {
             minDistance = dist;
             nearestFeature = feature;
         }
     });
 
-    if (!nearestFeature) return null;
+    if (!nearestFeature) {
+        return { found: false, message: 'در شعاع ۳۰ کیلومتری این نقطه، داده فرونشست معتبری ثبت نشده است.' };
+    }
 
     const props = nearestFeature.properties;
     let rate = null;
-    
     for (const key in props) {
         if (key.includes('SAMPLE') || key.includes('VALUE')) {
             rate = parseFloat(props[key]);
@@ -446,13 +448,11 @@ async function getSubsidenceData(lat, lon) {
         }
     }
 
-    if (rate === null || isNaN(rate)) return null;
+    if (rate === null || isNaN(rate)) {
+        return { found: false, message: 'داده این نقطه فاقد مقدار معتبر فرونشست است.' };
+    }
 
-    return {
-        rate: rate,
-        distance: minDistance,
-        found: true
-    };
+    return { rate: rate, distance: minDistance, found: true };
 }
 
 // ============================================================
@@ -568,11 +568,13 @@ async function analyzeAll() {
             else if (absRate > 5) subScore = 3;
             else if (absRate > 2) subScore = 2;
             else subScore = 1;
-            subsidenceText = `نرخ فرونشست: ${absRate.toFixed(1)} سانتی‌متر در سال (فاصله تا نزدیک‌ترین ایستگاه: ${subsidenceData.distance.toFixed(1)} کیلومتر)`;
+            subsidenceText = `نرخ فرونشست: ${absRate.toFixed(1)} سانتی‌متر در سال (فاصله: ${subsidenceData.distance.toFixed(1)} کیلومتر)`;
+        } else if (subsidenceData && subsidenceData.message) {
+            subsidenceText = `⚠️ ${subsidenceData.message}`;
         } else {
             if (lat > 35 && lat < 36 && lon > 51 && lon < 52) subScore = 3.5; 
             else if (lat > 32 && lat < 36 && lon > 50 && lon < 55) subScore = 4.5; 
-            subsidenceText = 'داده دقیق فرونشست در دسترس نیست (تخمین بر اساس منطقه).';
+            subsidenceText = 'داده فرونشست در دسترس نیست (تخمین بر اساس منطقه).';
         }
 
         let lScore = 2;
