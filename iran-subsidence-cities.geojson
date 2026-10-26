@@ -1,0 +1,23 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [55.9900, 30.4100] }, "properties": { "name": "رفسنجان", "SAMPLE_1": 40.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [51.3890, 35.6892] }, "properties": { "name": "تهران (جنوب)", "SAMPLE_1": 33.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [51.0800, 35.4800] }, "properties": { "name": "رباط‌کریم", "SAMPLE_1": 30.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [51.6500, 35.3200] }, "properties": { "name": "ورامین", "SAMPLE_1": 25.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [51.4500, 34.0000] }, "properties": { "name": "کاشان", "SAMPLE_1": 25.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [50.9800, 35.8300] }, "properties": { "name": "مهرشهر کرج", "SAMPLE_1": 22.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [52.5300, 29.9000] }, "properties": { "name": "مرودشت", "SAMPLE_1": 22.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [51.6667, 32.6500] }, "properties": { "name": "اصفهان", "SAMPLE_1": 20.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [50.8800, 34.6400] }, "properties": { "name": "قم", "SAMPLE_1": 20.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [59.6000, 36.3000] }, "properties": { "name": "مشهد", "SAMPLE_1": 18.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [50.0000, 36.2700] }, "properties": { "name": "قزوین", "SAMPLE_1": 17.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [54.4300, 36.8400] }, "properties": { "name": "گرگان", "SAMPLE_1": 17.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [46.2900, 38.0800] }, "properties": { "name": "تبریز", "SAMPLE_1": 12.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [49.6800, 34.0900] }, "properties": { "name": "اراک", "SAMPLE_1": 12.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [50.0167, 35.0167] }, "properties": { "name": "ساوه", "SAMPLE_1": 12.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [48.5100, 34.8000] }, "properties": { "name": "کبودرآهنگ", "SAMPLE_1": 6.3 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [45.0000, 37.7000] }, "properties": { "name": "ارومیه", "SAMPLE_1": 8.0 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [52.5300, 29.6000] }, "properties": { "name": "شیراز", "SAMPLE_1": 5.0 } }
+  ]
+}
