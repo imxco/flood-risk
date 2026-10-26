@@ -23,6 +23,13 @@
     { "type": "Feature", "geometry": { "type": "Point", "coordinates": [56.5700, 27.1800] }, "properties": { "name": "بندرعباس", "SAMPLE_1": 2.0, "radius": 40 } },
     { "type": "Feature", "geometry": { "type": "Point", "coordinates": [60.8600, 31.0500] }, "properties": { "name": "زاهدان", "SAMPLE_1": 3.0, "radius": 40 } },
     { "type": "Feature", "geometry": { "type": "Point", "coordinates": [57.0700, 30.2800] }, "properties": { "name": "کرمان", "SAMPLE_1": 8.0, "radius": 50 } },
-    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [48.6700, 31.3200] }, "properties": { "name": "اهواز", "SAMPLE_1": 5.0, "radius": 40 } }
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [48.6700, 31.3200] }, "properties": { "name": "اهواز", "SAMPLE_1": 5.0, "radius": 40 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [52.8900, 29.1000] }, "properties": { "name": "فسا", "SAMPLE_1": 10.0, "radius": 40 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [54.3300, 30.7700] }, "properties": { "name": "شهر بابک", "SAMPLE_1": 14.0, "radius": 40 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [52.3100, 30.8300] }, "properties": { "name": "آباده", "SAMPLE_1": 12.0, "radius": 40 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [48.4800, 36.6700] }, "properties": { "name": "زنجان", "SAMPLE_1": 7.0, "radius": 40 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [48.5100, 34.8000] }, "properties": { "name": "همدان", "SAMPLE_1": 10.0, "radius": 50 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [47.0600, 34.3100] }, "properties": { "name": "کرمانشاه", "SAMPLE_1": 5.0, "radius": 40 } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [49.5800, 37.2800] }, "properties": { "name": "رشت", "SAMPLE_1": 1.0, "radius": 30 } }
   ]
 }
