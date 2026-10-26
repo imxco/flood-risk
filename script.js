@@ -414,15 +414,20 @@ async function loadHanoverData() {
 async function getSubsidenceData(lat, lon) {
     const userPoint = turf.point([lon, lat]);
     
+    // مرحله ۱: جستجو در فایل شهرها (با شعاع پویا - دقیق‌ترین حالت)
     const citiesData = await loadCitiesData();
     if (citiesData && citiesData.features) {
         let minDist = Infinity, nearest = null, chosenRadius = 50;
+        
         citiesData.features.forEach(f => {
             if (!f.geometry || f.geometry.type !== 'Point') return;
             const dist = turf.distance(userPoint, f, { units: 'kilometers' });
-            const radius = f.properties.radius || 50;
+            const radius = f.properties.radius || 50; 
+            
             if (dist <= radius && dist < minDist) {
-                minDist = dist; nearest = f; chosenRadius = radius;
+                minDist = dist; 
+                nearest = f;
+                chosenRadius = radius;
             }
         });
         if (nearest) {
@@ -436,14 +441,16 @@ async function getSubsidenceData(lat, lon) {
         }
     }
 
+    // مرحله ۲: جستجو در فایل هانوفر (بدون محدودیت شعاع - نزدیک‌ترین نقطه)
     const hanoverData = await loadHanoverData();
     if (hanoverData && hanoverData.features) {
         let minDist = Infinity, nearest = null;
-        const hanoverRadius = 50;
+
         hanoverData.features.forEach(f => {
             if (!f.geometry || f.geometry.type !== 'Point') return;
             const dist = turf.distance(userPoint, f, { units: 'kilometers' });
-            if (dist <= hanoverRadius && dist < minDist) {
+            // 🌟 حذف محدودیت شعاع: هر نقطه‌ای که نزدیک‌تر باشد، انتخاب می‌شود
+            if (dist < minDist) {
                 minDist = dist; nearest = f;
             }
         });
@@ -453,12 +460,13 @@ async function getSubsidenceData(lat, lon) {
                 if (key.includes('SAMPLE') || key.includes('VALUE')) { rate = parseFloat(nearest.properties[key]); break; }
             }
             if (rate !== null && !isNaN(rate)) {
-                return { rate: rate, distance: minDist, found: true, source: 'hanover', radius: hanoverRadius };
+                return { rate: rate, distance: minDist, found: true, source: 'hanover', radius: 'unlimited' };
             }
         }
     }
 
-    return { found: false, message: 'در شعاع تعیین‌شده این نقطه، داده معتبری ثبت نشده است.' };
+    // مرحله ۳: هیچ داده‌ای یافت نشد (فقط اگر فایل هانوفر وجود نداشته باشد)
+    return { found: false, message: 'داده فرونشست در دسترس نیست.' };
 }
 
 // ============================================================
