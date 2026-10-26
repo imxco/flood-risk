@@ -424,16 +424,45 @@ async function loadHanoverData() {
 
 async function getSubsidenceData(lat, lon) {
     const userPoint = turf.point([lon, lat]);
-    const searchRadius = 30; 
-
-    // مرحله ۱: جستجو در فایل شهرها
+    
+    // مرحله ۱: جستجو در فایل شهرها (با شعاع پویا)
     const citiesData = await loadCitiesData();
     if (citiesData && citiesData.features) {
-        let minDist = Infinity, nearest = null;
+        let minDist = Infinity, nearest = null, chosenRadius = 50;
+        
         citiesData.features.forEach(f => {
             if (!f.geometry || f.geometry.type !== 'Point') return;
             const dist = turf.distance(userPoint, f, { units: 'kilometers' });
-            if (dist <= searchRadius && dist < minDist) {
+            // خواندن شعاع اختصاصی شهر از فایل (اگر نبود، پیش‌فرض 50)
+            const radius = f.properties.radius || 50; 
+            
+            if (dist <= radius && dist < minDist) {
+                minDist = dist; 
+                nearest = f;
+                chosenRadius = radius; // ذخیره شعاع برای نمایش
+            }
+        });
+        if (nearest) {
+            let rate = null;
+            for (const key in nearest.properties) {
+                if (key.includes('SAMPLE') || key.includes('VALUE')) { rate = parseFloat(nearest.properties[key]); break; }
+            }
+            if (rate !== null && !isNaN(rate)) {
+                return { rate: rate, distance: minDist, found: true, source: 'city', radius: chosenRadius };
+            }
+        }
+    }
+
+    // مرحله ۲: جستجو در فایل هانوفر
+    const hanoverData = await loadHanoverData();
+    if (hanoverData && hanoverData.features) {
+        let minDist = Infinity, nearest = null;
+        const hanoverRadius = 50; // شعاع پیش‌فرض برای داده‌های ماهواره‌ای
+
+        hanoverData.features.forEach(f => {
+            if (!f.geometry || f.geometry.type !== 'Point') return;
+            const dist = turf.distance(userPoint, f, { units: 'kilometers' });
+            if (dist <= hanoverRadius && dist < minDist) {
                 minDist = dist; nearest = f;
             }
         });
@@ -443,10 +472,14 @@ async function getSubsidenceData(lat, lon) {
                 if (key.includes('SAMPLE') || key.includes('VALUE')) { rate = parseFloat(nearest.properties[key]); break; }
             }
             if (rate !== null && !isNaN(rate)) {
-                return { rate: rate, distance: minDist, found: true, source: 'city' };
+                return { rate: rate, distance: minDist, found: true, source: 'hanover', radius: hanoverRadius };
             }
         }
     }
+
+    // مرحله ۳: هیچ داده‌ای یافت نشد
+    return { found: false, message: 'در شعاع تعیین‌شده این نقطه، داده معتبری ثبت نشده است.' };
+}
 
     // مرحله ۲: جستجو در فایل هانوفر
     const hanoverData = await loadHanoverData();
