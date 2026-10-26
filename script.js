@@ -7,7 +7,8 @@ let radarChart = null, barChart = null, precipChart = null, windChart = null, te
 const WORKER_URL = 'https://nassaproxyv2.behnam-zamani.workers.dev';
 const MONTH_NAMES_FA = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
 let riverDataCache = null;
-let subsidenceDataCache = null;
+let citiesSubsidenceCache = null;
+let hanoverSubsidenceCache = null;
 
 // ============================================================
 // راه‌اندازی نقشه
@@ -398,61 +399,79 @@ async function getRiverDistance(lat, lon) {
 }
 
 // ============================================================
-// 📉 فرونشست (از GeoJSON با شعاع جستجو)
+// 📉 فرونشست (منطق مرج: شهرها + هانوفر)
 // ============================================================
-async function loadSubsidenceData() {
-    if (subsidenceDataCache) return subsidenceDataCache;
+
+async function loadCitiesData() {
+    if (citiesSubsidenceCache) return citiesSubsidenceCache;
+    try {
+        const res = await fetch('iran-subsidence-cities.geojson');
+        if (!res.ok) return null;
+        citiesSubsidenceCache = await res.json();
+        return citiesSubsidenceCache;
+    } catch (e) { return null; }
+}
+
+async function loadHanoverData() {
+    if (hanoverSubsidenceCache) return hanoverSubsidenceCache;
     try {
         const res = await fetch('iran-subsidence.geojson');
-        if (!res.ok) {
-            console.warn('فایل فرونشست یافت نشد.');
-            return null;
-        }
-        subsidenceDataCache = await res.json();
-        console.log('✅ دیتابیس فرونشست بارگذاری شد:', subsidenceDataCache.features ? subsidenceDataCache.features.length : 0, 'نقطه');
-        return subsidenceDataCache;
-    } catch (e) {
-        console.warn('خطا در بارگذاری فرونشست:', e);
-        return null;
-    }
+        if (!res.ok) return null;
+        hanoverSubsidenceCache = await res.json();
+        return hanoverSubsidenceCache;
+    } catch (e) { return null; }
 }
 
 async function getSubsidenceData(lat, lon) {
-    const data = await loadSubsidenceData();
-    if (!data || !data.features) return null;
-
     const userPoint = turf.point([lon, lat]);
-    let minDistance = Infinity;
-    let nearestFeature = null;
-    const searchRadius = 30; // شعاع ۳۰ کیلومتری برای جستجو
+    const searchRadius = 30; 
 
-    data.features.forEach(feature => {
-        if (!feature.geometry || feature.geometry.type !== 'Point') return;
-        const dist = turf.distance(userPoint, feature, { units: 'kilometers' });
-        if (dist <= searchRadius && dist < minDistance) {
-            minDistance = dist;
-            nearestFeature = feature;
-        }
-    });
-
-    if (!nearestFeature) {
-        return { found: false, message: 'در شعاع ۳۰ کیلومتری این نقطه، داده فرونشست معتبری ثبت نشده است.' };
-    }
-
-    const props = nearestFeature.properties;
-    let rate = null;
-    for (const key in props) {
-        if (key.includes('SAMPLE') || key.includes('VALUE')) {
-            rate = parseFloat(props[key]);
-            break;
+    // مرحله ۱: جستجو در فایل شهرها
+    const citiesData = await loadCitiesData();
+    if (citiesData && citiesData.features) {
+        let minDist = Infinity, nearest = null;
+        citiesData.features.forEach(f => {
+            if (!f.geometry || f.geometry.type !== 'Point') return;
+            const dist = turf.distance(userPoint, f, { units: 'kilometers' });
+            if (dist <= searchRadius && dist < minDist) {
+                minDist = dist; nearest = f;
+            }
+        });
+        if (nearest) {
+            let rate = null;
+            for (const key in nearest.properties) {
+                if (key.includes('SAMPLE') || key.includes('VALUE')) { rate = parseFloat(nearest.properties[key]); break; }
+            }
+            if (rate !== null && !isNaN(rate)) {
+                return { rate: rate, distance: minDist, found: true, source: 'city' };
+            }
         }
     }
 
-    if (rate === null || isNaN(rate)) {
-        return { found: false, message: 'داده این نقطه فاقد مقدار معتبر فرونشست است.' };
+    // مرحله ۲: جستجو در فایل هانوفر
+    const hanoverData = await loadHanoverData();
+    if (hanoverData && hanoverData.features) {
+        let minDist = Infinity, nearest = null;
+        hanoverData.features.forEach(f => {
+            if (!f.geometry || f.geometry.type !== 'Point') return;
+            const dist = turf.distance(userPoint, f, { units: 'kilometers' });
+            if (dist <= searchRadius && dist < minDist) {
+                minDist = dist; nearest = f;
+            }
+        });
+        if (nearest) {
+            let rate = null;
+            for (const key in nearest.properties) {
+                if (key.includes('SAMPLE') || key.includes('VALUE')) { rate = parseFloat(nearest.properties[key]); break; }
+            }
+            if (rate !== null && !isNaN(rate)) {
+                return { rate: rate, distance: minDist, found: true, source: 'hanover' };
+            }
+        }
     }
 
-    return { rate: rate, distance: minDistance, found: true };
+    // مرحله ۳: هیچ داده‌ای یافت نشد
+    return { found: false, message: 'در شعاع ۳۰ کیلومتری این نقطه، داده معتبری ثبت نشده است.' };
 }
 
 // ============================================================
@@ -568,7 +587,9 @@ async function analyzeAll() {
             else if (absRate > 5) subScore = 3;
             else if (absRate > 2) subScore = 2;
             else subScore = 1;
-            subsidenceText = `نرخ فرونشست: ${absRate.toFixed(1)} سانتی‌متر در سال (فاصله: ${subsidenceData.distance.toFixed(1)} کیلومتر)`;
+            
+            const sourceLabel = (subsidenceData.source === 'city') ? 'داده شهری' : 'داده ماهواره‌ای';
+            subsidenceText = `نرخ فرونشست: ${absRate.toFixed(1)} سانتی‌متر در سال (منبع: ${sourceLabel}، فاصله: ${subsidenceData.distance.toFixed(1)} کیلومتر)`;
         } else if (subsidenceData && subsidenceData.message) {
             subsidenceText = `⚠️ ${subsidenceData.message}`;
         } else {
