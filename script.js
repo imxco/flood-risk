@@ -414,20 +414,15 @@ async function loadHanoverData() {
 async function getSubsidenceData(lat, lon) {
     const userPoint = turf.point([lon, lat]);
     
-    // مرحله ۱: جستجو در فایل شهرها (با شعاع پویا)
     const citiesData = await loadCitiesData();
     if (citiesData && citiesData.features) {
         let minDist = Infinity, nearest = null, chosenRadius = 50;
-        
         citiesData.features.forEach(f => {
             if (!f.geometry || f.geometry.type !== 'Point') return;
             const dist = turf.distance(userPoint, f, { units: 'kilometers' });
-            const radius = f.properties.radius || 50; // شعاع اختصاصی شهر
-            
+            const radius = f.properties.radius || 50;
             if (dist <= radius && dist < minDist) {
-                minDist = dist; 
-                nearest = f;
-                chosenRadius = radius;
+                minDist = dist; nearest = f; chosenRadius = radius;
             }
         });
         if (nearest) {
@@ -441,12 +436,10 @@ async function getSubsidenceData(lat, lon) {
         }
     }
 
-    // مرحله ۲: جستجو در فایل هانوفر
     const hanoverData = await loadHanoverData();
     if (hanoverData && hanoverData.features) {
         let minDist = Infinity, nearest = null;
         const hanoverRadius = 50;
-
         hanoverData.features.forEach(f => {
             if (!f.geometry || f.geometry.type !== 'Point') return;
             const dist = turf.distance(userPoint, f, { units: 'kilometers' });
@@ -465,7 +458,6 @@ async function getSubsidenceData(lat, lon) {
         }
     }
 
-    // مرحله ۳: هیچ داده‌ای یافت نشد
     return { found: false, message: 'در شعاع تعیین‌شده این نقطه، داده معتبری ثبت نشده است.' };
 }
 
@@ -542,7 +534,6 @@ async function analyzeAll() {
         const slopePercent = slopeData ? slopeData.slopePercent : null;
         const vs30 = await getVs30Estimate(slopePercent);
 
-        // محاسبه امتیازها
         let fScore = 1;
         if (climate) {
             if (climate.precip.annualAvg > 700) fScore = 4;
@@ -571,7 +562,6 @@ async function analyzeAll() {
         if (climate && climate.precip.annualAvg > 700) landScore += 0.5;
         landScore = Math.min(5, landScore);
 
-        // محاسبه امتیاز فرونشست
         let subScore = 1;
         let subsidenceText = '';
         
