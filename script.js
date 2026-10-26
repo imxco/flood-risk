@@ -403,7 +403,7 @@ async function getRiverDistance(lat, lon) {
 async function loadSubsidenceData() {
     if (subsidenceDataCache) return subsidenceDataCache;
     try {
-        const res = await fetch('test-subsidence.geojson');
+        const res = await fetch('iran-subsidence.geojson');
         if (!res.ok) {
             console.warn('فایل فرونشست یافت نشد.');
             return null;
