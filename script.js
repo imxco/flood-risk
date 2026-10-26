@@ -399,27 +399,16 @@ async function getRiverDistance(lat, lon) {
 }
 
 // ============================================================
-// 📉 فرونشست (منطق مرج: شهرها + هانوفر)
+// 📉 فرونشست (منطق مرج: شهرها + هانوفر با شعاع پویا)
 // ============================================================
-
 async function loadCitiesData() {
     if (citiesSubsidenceCache) return citiesSubsidenceCache;
-    try {
-        const res = await fetch('iran-subsidence-cities.geojson');
-        if (!res.ok) return null;
-        citiesSubsidenceCache = await res.json();
-        return citiesSubsidenceCache;
-    } catch (e) { return null; }
+    try { const res = await fetch('iran-subsidence-cities.geojson'); if (!res.ok) return null; citiesSubsidenceCache = await res.json(); return citiesSubsidenceCache; } catch (e) { return null; }
 }
 
 async function loadHanoverData() {
     if (hanoverSubsidenceCache) return hanoverSubsidenceCache;
-    try {
-        const res = await fetch('iran-subsidence.geojson');
-        if (!res.ok) return null;
-        hanoverSubsidenceCache = await res.json();
-        return hanoverSubsidenceCache;
-    } catch (e) { return null; }
+    try { const res = await fetch('iran-subsidence.geojson'); if (!res.ok) return null; hanoverSubsidenceCache = await res.json(); return hanoverSubsidenceCache; } catch (e) { return null; }
 }
 
 async function getSubsidenceData(lat, lon) {
@@ -433,13 +422,12 @@ async function getSubsidenceData(lat, lon) {
         citiesData.features.forEach(f => {
             if (!f.geometry || f.geometry.type !== 'Point') return;
             const dist = turf.distance(userPoint, f, { units: 'kilometers' });
-            // خواندن شعاع اختصاصی شهر از فایل (اگر نبود، پیش‌فرض 50)
-            const radius = f.properties.radius || 50; 
+            const radius = f.properties.radius || 50; // شعاع اختصاصی شهر
             
             if (dist <= radius && dist < minDist) {
                 minDist = dist; 
                 nearest = f;
-                chosenRadius = radius; // ذخیره شعاع برای نمایش
+                chosenRadius = radius;
             }
         });
         if (nearest) {
@@ -457,7 +445,7 @@ async function getSubsidenceData(lat, lon) {
     const hanoverData = await loadHanoverData();
     if (hanoverData && hanoverData.features) {
         let minDist = Infinity, nearest = null;
-        const hanoverRadius = 50; // شعاع پیش‌فرض برای داده‌های ماهواره‌ای
+        const hanoverRadius = 50;
 
         hanoverData.features.forEach(f => {
             if (!f.geometry || f.geometry.type !== 'Point') return;
@@ -479,32 +467,6 @@ async function getSubsidenceData(lat, lon) {
 
     // مرحله ۳: هیچ داده‌ای یافت نشد
     return { found: false, message: 'در شعاع تعیین‌شده این نقطه، داده معتبری ثبت نشده است.' };
-}
-
-    // مرحله ۲: جستجو در فایل هانوفر
-    const hanoverData = await loadHanoverData();
-    if (hanoverData && hanoverData.features) {
-        let minDist = Infinity, nearest = null;
-        hanoverData.features.forEach(f => {
-            if (!f.geometry || f.geometry.type !== 'Point') return;
-            const dist = turf.distance(userPoint, f, { units: 'kilometers' });
-            if (dist <= searchRadius && dist < minDist) {
-                minDist = dist; nearest = f;
-            }
-        });
-        if (nearest) {
-            let rate = null;
-            for (const key in nearest.properties) {
-                if (key.includes('SAMPLE') || key.includes('VALUE')) { rate = parseFloat(nearest.properties[key]); break; }
-            }
-            if (rate !== null && !isNaN(rate)) {
-                return { rate: rate, distance: minDist, found: true, source: 'hanover' };
-            }
-        }
-    }
-
-    // مرحله ۳: هیچ داده‌ای یافت نشد
-    return { found: false, message: 'در شعاع ۳۰ کیلومتری این نقطه، داده معتبری ثبت نشده است.' };
 }
 
 // ============================================================
