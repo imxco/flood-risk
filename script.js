@@ -9,6 +9,7 @@ const MONTH_NAMES_FA = ['فروردین', 'اردیبهشت', 'خرداد', 'ت�
 let riverDataCache = null;
 let citiesSubsidenceCache = null;
 let hanoverSubsidenceCache = null;
+let airportsCache = null;
 
 // ============================================================
 // راه‌اندازی نقشه
@@ -467,6 +468,58 @@ async function getSubsidenceData(lat, lon) {
 
     // مرحله ۳: هیچ داده‌ای یافت نشد (فقط اگر فایل هانوفر وجود نداشته باشد)
     return { found: false, message: 'داده فرونشست در دسترس نیست.' };
+}
+
+// ============================================================
+// ✈️ خطر هوانوردی (فرودگاه + دالان هوایی)
+// ============================================================
+async function loadAirports() {
+    if (airportsCache) return airportsCache;
+    try {
+        const res = await fetch('iran-airports.geojson');
+        if (!res.ok) return null;
+        airportsCache = await res.json();
+        return airportsCache;
+    } catch (e) { return null; }
+}
+
+async function getAviationRisk(lat, lon) {
+    const userPoint = turf.point([lon, lat]);
+    const airportsData = await loadAirports();
+
+    let airportScore = 1;
+    let airportText = 'داده فرودگاه در دسترس نیست';
+    let nearestName = '';
+    let minDist = Infinity;
+
+    if (airportsData && airportsData.features && airportsData.features.length > 0) {
+        airportsData.features.forEach(f => {
+            if (!f.geometry || f.geometry.type !== 'Point') return;
+            const dist = turf.distance(userPoint, f, { units: 'kilometers' });
+            if (dist < minDist) {
+                minDist = dist;
+                nearestName = (f.properties && f.properties.name) || 'فرودگاه بدون نام';
+            }
+        });
+
+        if (minDist <= 5) airportScore = 5;
+        else if (minDist <= 10) airportScore = 4;
+        else if (minDist <= 20) airportScore = 3;
+        else if (minDist <= 40) airportScore = 2;
+        else airportScore = 1;
+
+        airportText = `فاصله تا نزدیک‌ترین فرودگاه (${nearestName}): ${minDist.toFixed(1)} کیلومتر`;
+    }
+
+    // TODO: لایه دالان هوایی (نیاز به داده AIP)
+    // فعلاً فقط فرودگاه در نظر گرفته می‌شود.
+
+    return {
+        score: airportScore,
+        text: airportText,
+        nearestName: nearestName,
+        distance: minDist
+    };
 }
 
 // ============================================================
